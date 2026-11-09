@@ -3,6 +3,7 @@
 import * as sky from '../sky.js';
 import { fmtTime, fmtDay, fmtDayInline, fmtDate, fmtCountdown } from '../time.js';
 import { visiblePasses } from '../issService.js';
+import * as showers from '../showers.js';
 import { icons, moonSVG, esc } from '../ui.js';
 
 let root, ctx, timer, lastRun = 0;
@@ -47,6 +48,15 @@ function issTeaser() {
     <div class="muted">${sky.dirName(next.rise.az)} → ${sky.dirName(next.set.az)} · up to ${Math.round(next.peak.el)}° · ${next.brightness}</div></div>`;
 }
 
+function showerTeaser(now, obs) {
+  const c = showers.calendar(now, obs).find(x => x.sh.zhr >= 15 || x.st.phase === 'peak');
+  if (!c) return '';
+  const when = c.st.phase === 'peak' ? 'peak tonight' : fmtCountdown(c.st.next.peakAt - now);
+  return `<div class="card tap" data-go="showers"><div class="eyebrow">Meteor showers</div>
+    <div class="big">${c.sh.name} · ${showers.peakLabel(c.st.next)} <span class="chip-s">${when}</span></div>
+    <div class="muted">Up to ${c.sh.zhr}/hr · ${c.moonAtPeak.label} at peak</div></div>`;
+}
+
 function render() {
   const now = new Date();
   const obs = sky.makeObserver(ctx.location());
@@ -76,6 +86,7 @@ function render() {
       </div>
     </button>
     ${issTeaser()}
+    ${showerTeaser(now, obs)}
     <h3 class="sect">Planets</h3>
     <div class="list">${rows.map(r => r.html).join('')}</div>
     <details class="fold"><summary>Faint planets (need binoculars / telescope)</summary>

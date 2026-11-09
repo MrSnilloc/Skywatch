@@ -5,6 +5,7 @@ import { createOrientation, angleDiff } from '../compass.js';
 import { listTargets, resolveTarget } from '../targets.js';
 import * as sky from '../sky.js';
 import { store } from '../store.js';
+import { currentDeclination } from '../magnetic.js';
 import { icons, toast, esc } from '../ui.js';
 
 const RAD = Math.PI / 180;
@@ -28,6 +29,7 @@ function refreshTarget() {
 
 function renderChips() {
   const chips = listTargets(ctx);
+  if (target && !chips.some(c => c.id === targetId)) chips.unshift({ id: targetId, label: target.label }); // e.g. "best view" spots
   el.querySelector('#chips').innerHTML = chips.map(c =>
     `<button class="chip ${c.id === targetId ? 'on' : ''}" data-t="${c.id}">${esc(c.label)}</button>`).join('');
 }
@@ -192,14 +194,14 @@ export const pointView = {
       <details class="fold"><summary>Compass tools</summary>
         <p class="sub">If the dot seems consistently off left/right, aim at the Moon or a known object, then tap Calibrate.</p>
         <div class="actions"><button class="btn" data-act="calibrate">Calibrate to target</button><button class="btn ghost" data-act="reset">Reset</button></div>
-        <p class="sub">Trim: ${store.get('azOffset').toFixed(0)}° · Declination: ${store.get('declination')}°</p>
+        <p class="sub">Trim: ${store.get('azOffset').toFixed(0)}° · Magnetic declination: ${currentDeclination(ctx.location()).toFixed(1)}° (${store.get('declAuto') ? 'automatic' : 'manual'})</p>
       </details></div>`;
     cv = el.querySelector('#cv'); g = cv.getContext('2d');
     el.addEventListener('click', onClick);
     sim = null;
     orient = createOrientation({
       smoothing: ctx.config.point.smoothing,
-      getCorrection: () => store.get('declination') + store.get('azOffset'),
+      getCorrection: () => currentDeclination(ctx.location()) + store.get('azOffset'),
     });
     setTarget(targetId); store.set('lastTarget', targetId);
     resize(); window.addEventListener('resize', resize); bindDrag();

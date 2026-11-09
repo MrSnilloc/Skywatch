@@ -9,6 +9,7 @@
 
 import * as sky from './sky.js';
 import { issLive } from './iss.js';
+import { byCode, radiantNow, gazeSpot, activeShowers } from './showers.js';
 
 const moonProvider = {
   list: () => [{ id: 'moon', label: 'Moon' }],
@@ -45,7 +46,22 @@ const issProvider = {
   },
 };
 
-const providers = [issProvider, moonProvider, planetProvider];
+// Meteor showers: aim at a radiant ("radiant:LEO") or at the best spot to watch from ("gaze:LEO").
+const showerProvider = {
+  list: () => activeShowers().map(sh => ({ id: 'radiant:' + sh.code, label: sh.name + ' radiant' })),
+  resolve(id, ctx, date) {
+    const [kind, code] = id.split(':');
+    if (kind !== 'radiant' && kind !== 'gaze') return null;
+    const sh = byCode(code);
+    if (!sh) return null;
+    const r = radiantNow(sh, date, sky.makeObserver(ctx.location()));
+    if (kind === 'radiant') return { id, label: sh.name + ' radiant', az: r.az, alt: r.alt, note: `${sh.constellation} · meteors streak away from here` };
+    const g = gazeSpot(r.az, r.alt);
+    return { id, label: sh.name + ' — best view', az: g.az, alt: g.alt, note: 'face here, then watch the whole sky' };
+  },
+};
+
+const providers = [issProvider, moonProvider, planetProvider, showerProvider];
 
 export function listTargets(ctx) {
   return providers.flatMap(p => p.list(ctx));

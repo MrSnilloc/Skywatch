@@ -15,14 +15,16 @@ The app must be on an **https** web address for the compass, GPS and "install" t
 
 It now has its own icon, opens full-screen and works offline (ISS data refreshes whenever you're online).
 
-**Updating later:** upload the changed files to the repository again. In `sw.js` change `skywatch-v1` to `skywatch-v2` so phones pick up the new version.
+**Updating later:** upload the changed files to the repository again. In `sw.js` change the number in `skywatch-vN` (for example `skywatch-v2` to `skywatch-v3`) so phones pick up the new version.
 
 ## Using it
 - **Tonight**: darkness level, Moon phase, planets, next visible ISS pass. Tap anything to point at it.
 - **ISS**: list of passes (green = you can actually see it). Tap a pass for details, **Add to calendar** gives you a phone reminder 10 minutes before.
+- **Showers**: meteor showers. The top card is the best shower tonight (rough rate per hour, best viewing window, Moon interference). Below it is every major shower by next peak. Tap one for details, **Point at radiant** to aim at the spot the meteors streak from, or **Where to look** for a good place to watch (meteors have the longest trails 40–80° away from the radiant).
 - **Point**: hold the *back* of the phone up toward the sky and follow the dot. "On target ✓" turns green when you're lined up.
   If left/right seems consistently off, aim at the Moon and tap **Compass tools → Calibrate**.
-- **Settings (gear)**: GPS location, night mode, minimum pass height, compass declination.
+- **Settings (gear)**: change location (type a ZIP code, use GPS, or enter coordinates), night mode, minimum pass height, compass correction.
+  The compass correction (magnetic declination) is worked out automatically for your location; you can switch it to manual.
 
 ## Layout (for adding features)
 | File | Job |
@@ -32,15 +34,20 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/sky.js` | Sun / Moon / planets maths |
 | `js/iss.js`, `js/issService.js` | ISS orbit data, live position, pass prediction |
 | `js/compass.js` | Phone sensors → where the phone is pointing |
+| `js/magnetic.js` | Magnetic declination for your location (compass → true north) |
+| `js/showers.js` | Meteor shower list (**add a shower: one entry**), dates, radiant positions, tonight's plan |
+| `js/geo.js` | ZIP code → location lookup |
 | `js/targets.js` | Everything the finder can aim at |
 | `js/views/*.js` | The screens (Tonight, ISS, Point, Settings) |
 | `css/style.css` | Look and feel (colours are variables at the top) |
 
 ### How to add a feature
 - **New screen** (e.g. Meteor Showers, Launches): copy `js/views/tonight.js`, change `id`/`title`, add it to the list in `js/views/index.js`. The bottom bar adds a button automatically.
-- **New thing to aim at** (e.g. a meteor-shower radiant, a bright star): add a provider to `js/targets.js`. It then appears as a chip on the Point screen.
+- **New meteor shower**: add one entry to the list at the top of `js/showers.js`.
+- **New thing to aim at** (e.g. a bright star, Tiangong): add a provider to `js/targets.js`. It then appears as a chip on the Point screen.
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 
 ## Credits
-Orbit maths: satellite.js (MIT). Sun/Moon/planets: astronomy-engine (MIT). ISS orbit data: CelesTrak, with backup sources.
+Orbit maths: satellite.js (MIT). Sun/Moon/planets/radiants: astronomy-engine (MIT). Magnetic declination: NOAA World Magnetic Model 2025 via geomagnetism (Apache-2.0). ISS orbit data: CelesTrak, with backup sources. ZIP lookup: zippopotam.us. Licences are in `lib/THIRD-PARTY-LICENSES.txt`.
+Shower dates follow the International Meteor Organization / American Meteor Society calendars and are approximate.

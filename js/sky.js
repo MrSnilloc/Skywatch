@@ -74,3 +74,21 @@ export function planetInfo(name, date, obs) {
   const rs = riseSet(name, date, obs);
   return { name, ...pos, mag: ill.mag, elong, rise: rs.rise, set: rs.set };
 }
+
+/**
+ * Where a FIXED point on the sky (RA/Dec in degrees, J2000 — like a meteor-shower radiant or a star)
+ * is right now: azimuth + altitude in degrees.
+ */
+export function fixedPosition(raDeg, decDeg, date, obs) {
+  const a = A();
+  const t = a.MakeTime(date);
+  const vec = a.VectorFromSphere(new a.Spherical(decDeg, raDeg, 1), t);
+  const ofDate = a.EquatorFromVector(a.RotateVector(a.Rotation_EQJ_EQD(t), vec));   // J2000 -> of-date
+  const hor = a.Horizon(date, obs, ofDate.ra, ofDate.dec, 'normal');
+  return { az: hor.azimuth, alt: hor.altitude };
+}
+
+/** Moon brightness fraction (0..1) at a moment. */
+export function moonFractionAt(date) {
+  return A().Illumination('Moon', date).phase_fraction;
+}

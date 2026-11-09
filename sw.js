@@ -2,13 +2,13 @@
 // Orbit data is NOT cached here (the app saves its own copy), and other websites are never touched.
 // When you change any app file, bump CACHE so phones pick up the new version.
 
-const CACHE = 'skywatch-v1';
+const CACHE = 'skywatch-v2';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'lib/astronomy.browser.min.js', 'lib/satellite.min.js',
+  'lib/astronomy.browser.min.js', 'lib/satellite.min.js', 'lib/geomagnetism.min.js',
   'js/main.js', 'js/config.js', 'js/store.js', 'js/bus.js', 'js/time.js', 'js/ui.js',
-  'js/sky.js', 'js/iss.js', 'js/issService.js', 'js/ics.js', 'js/compass.js', 'js/targets.js',
-  'js/views/index.js', 'js/views/tonight.js', 'js/views/iss.js', 'js/views/point.js', 'js/views/settings.js',
+  'js/sky.js', 'js/magnetic.js', 'js/showers.js', 'js/geo.js', 'js/iss.js', 'js/issService.js', 'js/ics.js', 'js/compass.js', 'js/targets.js',
+  'js/views/index.js', 'js/views/tonight.js', 'js/views/iss.js', 'js/views/showers.js', 'js/views/point.js', 'js/views/settings.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 

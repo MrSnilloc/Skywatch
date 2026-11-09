@@ -11,7 +11,8 @@ export const CONFIG = {
     lon: -80.1,
     elev: 400,               // metres above sea level
     locName: 'Home (ZIP 24133)',
-    declination: -8.5,       // magnetic -> true north correction, degrees (west = negative)
+    declAuto: true,          // work out the compass correction from the location automatically
+    declination: -8.5,       // manual compass correction in degrees (west = negative), used when declAuto is off
     azOffset: 0,             // extra compass trim set by "Calibrate" on the Point screen
     hour12: true,
     nightMode: false,        // red night-vision theme
@@ -49,6 +50,20 @@ export const CONFIG = {
     sunMinElongation: 12,    // planets closer to the Sun than this are "lost in the glare"
     heavyRefreshMs: 60000,   // rise/set + moon phases are recomputed this often
     lightRefreshMs: 5000,    // positions on the Tonight screen refresh this often
+  },
+
+  geo: {
+    zipApi: 'https://api.zippopotam.us/us/',   // free ZIP -> latitude/longitude lookup
+    timeoutMs: 8000,
+  },
+
+  showers: {
+    minAlt: 20,              // radiant must be this high for a "good" viewing window
+    darkSunAlt: -12,         // night counts as dark when the Sun is this far below the horizon
+    stepMin: 15,             // sampling step when planning tonight
+    lookaheadHours: 30,      // how far ahead to look for the next dark stretch
+    moonGood: 0.25,          // Moon fuller than this starts to wash out faint meteors
+    moonBad: 0.6,            // ...and is a real problem above this
   },
 
   point: {
