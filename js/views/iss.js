@@ -4,6 +4,7 @@ import * as sky from '../sky.js';
 import { issLive } from '../iss.js';
 import { passesToICS, downloadICS } from '../ics.js';
 import { refreshIss, visiblePasses } from '../issService.js';
+import { planesHTML, startPlanes, tickPlanes, stopPlanes } from './planes.js';
 import { entryFor, listChoices, loadSat, loadGroup, addFromGroup, computeEntry, loadStarlink, starlinkState } from '../satellites.js';
 import { fmtTime, fmtTimeSec, fmtDay, fmtCountdown, fmtAge } from '../time.js';
 import { store } from '../store.js';
@@ -72,7 +73,7 @@ function statusHTML() {
 
 function chipsHTML() {
   const ch = listChoices(ctx);
-  return `<div class="chips">${ch.map(c => `<button class="chip-btn ${c.id === cur || (c.id === 'starlink' && cur.startsWith('sl')) ? 'on' : ''}" data-act="sat" data-sat="${c.id}">${esc(c.name)}</button>`).join('')}<button class="chip-btn" data-act="more">More…</button></div>`;
+  return `<div class="chips"><button class="chip-btn ${cur === 'planes' ? 'on' : ''}" data-act="sat" data-sat="planes">✈ Planes</button>${ch.map(c => `<button class="chip-btn ${c.id === cur || (c.id === 'starlink' && cur.startsWith('sl')) ? 'on' : ''}" data-act="sat" data-sat="${c.id}">${esc(c.name)}</button>`).join('')}<button class="chip-btn" data-act="more">More…</button></div>`;
 }
 
 function trainsHTML() {
@@ -86,6 +87,12 @@ function trainsHTML() {
 }
 
 function render() {
+  if (cur === 'planes') {
+    root.innerHTML = `${chipsHTML()}<div class="stack" id="planes-host">${planesHTML(ctx)}</div>`;
+    startPlanes(ctx, root.querySelector('#planes-host'));
+    return;
+  }
+  stopPlanes();
   if (cur === 'starlink') {
     const st = starlinkState(ctx);
     if (st.status === 'ready' && st.trains.length) cur = st.trains[0];
@@ -132,6 +139,7 @@ function openMore() {
 
 function pick(id) {
   cur = id; expanded.clear();
+  if (id === 'planes') { render(); return; }
   if (id === 'starlink') { const st = starlinkState(ctx); if (st.status === 'idle' || st.status === 'error') loadStarlink(ctx); render(); return; }
   const e = entry();
   if (id !== 'iss' && e.status === 'idle') { if (e.extra) { computeEntry(ctx, id); } else loadSat(ctx, id); }
@@ -169,11 +177,18 @@ export const issView = {
     root = el.querySelector('#iss-body');
     root.addEventListener('click', onClick);
     if (cur === 'starlink' || cur.startsWith('sl')) { const st = starlinkState(ctx); if (st.status === 'idle') loadStarlink(ctx); }
-    const e0 = entry(); if (cur !== 'iss' && cur !== 'starlink' && e0.status === 'idle') { e0.extra ? computeEntry(ctx, cur) : loadSat(ctx, cur); }
+    const e0 = cur === 'planes' ? null : entry(); if (e0 && cur !== 'iss' && cur !== 'starlink' && e0.status === 'idle') { e0.extra ? computeEntry(ctx, cur) : loadSat(ctx, cur); }
     render();
-    this._off = ctx.bus.on('iss', render);
+    this._off = ctx.bus.on('iss', () => { if (cur !== 'planes') render(); });
+    let lastPlaneStatus = '';
+    this._offP = ctx.bus.on('planes', () => {
+      if (cur !== 'planes' || !root) return;
+      const st = ctx.planes ? ctx.planes.status + (ctx.planes.list.length ? '+' : '') : '';
+      if (st !== lastPlaneStatus) { lastPlaneStatus = st; render(); } else tickPlanes();
+    });
   },
   tick() {
+    if (root && cur === 'planes') { tickPlanes(); return; }
     if (!root || entry().status !== 'ready') return;
     const live = root.querySelector('#live');
     if (live) {
@@ -185,5 +200,5 @@ export const issView = {
       el.textContent = t - Date.now() > 0 ? fmtCountdown(t - Date.now()) : 'overhead now';
     });
   },
-  unmount() { if (this._off) this._off(); root = null; },
+  unmount() { stopPlanes(); if (this._off) this._off(); if (this._offP) this._offP(); root = null; },
 };

@@ -40,7 +40,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/skymath.js`, `js/skydata.js`, `data/sky.json` | Sky-map maths, star catalogue loader, ~5,000 stars + constellations |
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
-| `js/planes.js`, `js/ufo.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
+| `js/planes.js`, `js/ufo.js`, `js/views/planes.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
 | `js/comets.js` | Comet orbits, positions and brightness estimates |
 | `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
 | `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (globe, Moon, planets), coastlines, shared canvas colours |
@@ -59,7 +59,8 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 ## New in v0.9
 - **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
 - **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.
-- **🛸 What's that light?** on the Sky tab: checks planets, bright stars, satellites, Starlink trains, planes, comets and launches where you're pointing and gives a verdict. Unidentified? Save it to the **UFO log**.
+- **🛸 What's that light?** on the Sky tab opens the camera with a crosshair (no labels — no spoilers). Tap **What is this?** and Sky Watch works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
+- **✈ Planes** chip on the Passes tab: live radar (25/50/100 mi) and nearest-first list.
 
 ## New in v0.8
 - **Comets** (Events → Comets, Look Up, Sky map, Space → Planets): every known comet's orbit (Minor Planet Center / NASA JPL), estimated brightness now and at its best, where to look tonight.

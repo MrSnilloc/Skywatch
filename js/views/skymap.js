@@ -35,6 +35,7 @@ const LAYER_LABELS = [
 ];
 
 let ctx, root, cv, g, W = 0, H = 0, dpr = 1, raf = 0, dirty = true, orient = null, mounted = false;
+let video = null, stream = null, camErr = '', camCircleDeg = 10, camPanelAt = 0, camP = null, scanning = 0;
 let nightWas = false, model = null, modelSec = -1, hits = [], starScr = null, lastView = null, wakeLock = null, ready = false, noData = '';
 const pointers = new Map();
 let gc = null, gg = null;
@@ -164,18 +165,46 @@ function draw() {
   const view = currentView(); lastView = view;
   const span = Math.max(W, H), scale = M.scaleFor(S.fov, span);
   const cx = W / 2, cy = H / 2;
-  const P = (v) => { const p = M.project(v, view, scale); return p ? [cx + p[0], cy + p[1], p[2]] : null; };
+  const cam = S.camMode;
+  let P;
+  if (cam) {
+    // camera lens = straight-line (gnomonic) projection; camFov is the angle across the video's long side
+    const vw = (video && video.videoWidth) || W, vh = (video && video.videoHeight) || H;
+    const f = (Math.max(vw, vh) / 2) / Math.tan(S.camFov * RAD / 2) * Math.max(W / vw, H / vh);
+    camCircleDeg = Math.atan(Math.min(W, H) * 0.15 / f) * DEG;
+    P = (v) => { const sz = M.dot(v, view.fwd); if (sz < 0.08) return null; return [cx + f * M.dot(v, view.right) / sz, cy - f * M.dot(v, view.up) / sz, sz]; };
+  } else P = (v) => { const p = M.project(v, view, scale); return p ? [cx + p[0], cy + p[1], p[2]] : null; };
   const onScr = (p, m = 30) => p && p[0] > -m && p[0] < W + m && p[1] > -m && p[1] < H + m;
   hits = [];
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // background: night blue -> day blue by Sun altitude
   const dayT = Math.max(0, Math.min(1, (model.sunAlt + 12) / 12));
-  g.fillStyle = col(mix('#02040a', '#2d5a8c', dayT)); g.fillRect(0, 0, W, H);
-  const starA = 1 - 0.5 * dayT;
+  if (cam) {
+    // Camera mode shows NOTHING but the live picture and the circle — the app only reveals what it is when asked.
+    g.clearRect(0, 0, W, H); if (!video) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); }
+    camP = P;
+    const Rc = Math.min(W, H) * 0.15;
+    g.strokeStyle = col('#62f0a5'); g.lineWidth = 2; g.shadowColor = '#000'; g.shadowBlur = 6;
+    g.beginPath(); g.arc(cx, cy, Rc, 0, 2 * Math.PI); g.stroke();
+    g.beginPath(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.moveTo(cx + dx * (Rc - 10), cy + dy * (Rc - 10)); g.lineTo(cx + dx * (Rc + 14), cy + dy * (Rc + 14)); }
+    g.moveTo(cx - 6, cy); g.lineTo(cx + 6, cy); g.moveTo(cx, cy - 6); g.lineTo(cx, cy + 6); g.stroke(); g.shadowBlur = 0;
+    if (scanning) {                                   // "scanning…" sweep while the app thinks
+      const t = (performance.now() - scanning) / 1000, a = t * 7;
+      g.strokeStyle = col('#62f0a5'); g.lineWidth = 4; g.globalAlpha = 0.9;
+      g.beginPath(); g.arc(cx, cy, Rc + 7, a, a + 1.2); g.stroke();
+      g.globalAlpha = 0.25 + 0.2 * Math.sin(t * 12); g.fillStyle = col('#62f0a5'); g.beginPath(); g.arc(cx, cy, Rc, 0, 2 * Math.PI); g.fill(); g.globalAlpha = 1;
+    }
+    const hint = root.querySelector('#cam-hint');
+    const ht = camErr || noData || (scanning ? 'Scanning the sky…' : 'Put the mystery light in the circle');
+    if (hint.textContent !== ht) hint.textContent = ht;
+    return;
+  }
+  else { g.fillStyle = col(mix('#02040a', '#2d5a8c', dayT)); g.fillRect(0, 0, W, H); }
+  const starA = cam ? 1 : 1 - 0.5 * dayT;
 
   // ground shading (inverse stereographic per low-res pixel)
-  if (L.ground && gg) {
+  if (!cam && L.ground && gg) {
     const gw = gc.width, gh = gc.height, img = gg.createImageData(gw, gh), d = img.data;
     const base = document.documentElement.classList.contains('night') ? [12, 1, 1] : [3, 5, 9];
     for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
@@ -190,7 +219,7 @@ function draw() {
   }
 
   // alt/az grid
-  if (L.grid) {
+  if (!cam && L.grid) {
     g.strokeStyle = col('#2a4468'); g.lineWidth = 1; g.globalAlpha = 0.7;
     const poly = (fn, n) => { g.beginPath(); let pen = false; for (let i = 0; i <= n; i++) { const p = P(fn(i / n)); if (!p) { pen = false; continue; } pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true; } g.stroke(); };
     for (const alt of [15, 30, 45, 60, 75]) poly(t => M.azAltToVec(t * 360, alt), 120);
@@ -200,7 +229,7 @@ function draw() {
 
   // constellation lines
   if (L.lines && D) {
-    g.strokeStyle = col('#3f6aa6'); g.lineWidth = 1; g.globalAlpha = 0.6 * starA + 0.15; g.beginPath();
+    g.strokeStyle = col(cam ? '#9cc4ff' : '#3f6aa6'); g.lineWidth = 1; g.globalAlpha = cam ? 0.3 : 0.6 * starA + 0.15; g.beginPath();
     for (const sg of D.segs) {
       let pen = false;
       for (let k = 0; k < sg.count; k++) {
@@ -213,7 +242,7 @@ function draw() {
   }
 
   // deep-sky objects
-  if (L.dso && D) {
+  if (!cam && L.dso && D) {
     g.strokeStyle = col('#7fb0ff'); g.lineWidth = 1; g.fillStyle = col('#7fb0ff'); g.font = '10px system-ui'; g.globalAlpha = 0.85 * starA + 0.15;
     D.raw.dso.forEach((d, i) => {
       const p = P(vecAt(D.dsoStart + i));
@@ -234,8 +263,14 @@ function draw() {
     for (let i = 0; i < D.nStars; i++) {
       const p = P(vecAt(i));
       if (!onScr(p, 8)) { starScr[i * 2] = NaN; continue; }
-      starScr[i * 2] = p[0]; starScr[i * 2 + 1] = p[1];
       const m = D.mag[i];
+      if (cam && m > 2.6) { starScr[i * 2] = NaN; continue; }   // camera mode: only label the stars you can actually pick out
+      starScr[i * 2] = p[0]; starScr[i * 2 + 1] = p[1];
+      if (cam) {
+        g.strokeStyle = col('#cfe0ff'); g.globalAlpha = 0.7; g.lineWidth = 1; g.beginPath(); g.arc(p[0], p[1], 6, 0, 2 * Math.PI); g.stroke();
+        if (D.raw.names[i]) { g.fillStyle = col('#e6eeff'); g.fillText(D.raw.names[i], p[0] + 9, p[1] + 4); }
+        g.globalAlpha = 1; continue;
+      }
       const r = Math.max(0.55, Math.min(6.5, (6.6 - m) * 0.45 * zf));
       g.globalAlpha = Math.min(1, (0.55 + (6.2 - m) * 0.2)) * starA;
       g.fillStyle = col(M.bvColor(D.bv[i]));
@@ -249,7 +284,7 @@ function draw() {
   }
 
   // constellation names
-  if (L.conNames && D && S.fov <= 110) {
+  if (!cam && L.conNames && D && S.fov <= 110) {
     g.font = '600 10px system-ui'; g.fillStyle = col('#6e92c8'); g.textAlign = 'center'; g.globalAlpha = 0.9 * starA + 0.1;
     D.raw.cons.forEach((c, i) => {
       const p = P(vecAt(D.labelStart + i));
@@ -379,8 +414,16 @@ function draw() {
     }
   }
 
+  // camera crosshair: whatever is inside the circle is what you're asking about
+  if (cam) {
+    const Rc = Math.min(W, H) * 0.15;
+    g.strokeStyle = col('#62f0a5'); g.lineWidth = 2; g.shadowColor = '#000'; g.shadowBlur = 6;
+    g.beginPath(); g.arc(cx, cy, Rc, 0, 2 * Math.PI); g.stroke();
+    g.beginPath(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.moveTo(cx + dx * (Rc - 10), cy + dy * (Rc - 10)); g.lineTo(cx + dx * (Rc + 14), cy + dy * (Rc + 14)); }
+    g.moveTo(cx - 6, cy); g.lineTo(cx + 6, cy); g.moveTo(cx, cy - 6); g.lineTo(cx, cy + 6); g.stroke(); g.shadowBlur = 0;
+  }
   // centre reticle (live only) and HUD
-  if (S.mode === 'live') {
+  if (S.mode === 'live' && !cam) {
     g.strokeStyle = col('#ffffff'); g.globalAlpha = 0.35; g.lineWidth = 1;
     g.beginPath(); g.moveTo(cx - 10, cy); g.lineTo(cx + 10, cy); g.moveTo(cx, cy - 10); g.lineTo(cx, cy + 10); g.stroke(); g.globalAlpha = 1;
   }
@@ -521,19 +564,19 @@ function openFind() {
 
 // ---------- "What's that light?" ----------
 
-function candidatesAt(fwd) {
+function candidatesAt(fwd, extra = 0) {
   const out = [];
   const dark = model.sunAlt < -4;
-  const consider = (kind, id, label, vec, tol, weight, extra = {}) => {
+  const consider = (kind, id, label, vec, tol, weight, more = {}) => {
     if (!vec || vec[2] < -0.05) return;
-    const d = M.angleBetween(vec, fwd);
-    if (d <= tol) out.push({ kind, id, label, d, score: d / tol * weight, ...extra });
+    const d = M.angleBetween(vec, fwd), t = tol + extra;
+    if (d <= t) out.push({ kind, id, label, d, vec, score: d / t * weight, ...more });
   };
   for (const o of model.objs.values()) {
     if (o.kind === 'sun') consider('sun', o.id, 'Sun', o.vec, 12, 0.5);
     else if (o.kind === 'moon') consider('moon', o.id, 'Moon', o.vec, 12, 0.4);
-    else if (o.kind === 'planet' && o.mag < 2.5 && (dark || o.mag < -3)) consider('planet', o.id, o.label, o.vec, 10, o.mag < -2 ? 0.5 : 0.8, { mag: o.mag });
-    else if (o.kind === 'comet' && dark && o.mag < 7) consider('comet', o.id, 'Comet ' + o.label, o.vec, 6, 1);
+    else if (o.kind === 'planet' && o.mag < 6.5) consider('planet', o.id, o.label, o.vec, 10, (o.mag < -2 ? 0.5 : o.mag < 1.5 ? 0.75 : 1.2) * (dark || o.mag < -3 ? 1 : 1.3), { mag: o.mag });
+    else if (o.kind === 'comet' && o.mag < 8) consider('comet', o.id, 'Comet ' + o.label, o.vec, 6, 1);
     else if (o.kind === 'plane') consider('plane', o.id, o.label, o.vec, 12, 0.7, { plane: o.plane, look: o.look });
     else if (o.kind === 'sat') {
       const train = /^sat:sl/.test(o.id);
@@ -541,7 +584,7 @@ function candidatesAt(fwd) {
     }
   }
   const D = skyData();
-  if (D && dark) for (let i = 0; i < D.nStars && D.mag[i] < 1.8; i++) consider('star', 'star:' + i, D.raw.names[i] || 'Bright star', vecAt(i), 6, 1 + D.mag[i] * 0.2, { mag: D.mag[i] });
+  if (D) for (let i = 0; i < D.nStars && D.mag[i] < 2.6; i++) consider('star', 'star:' + i, D.raw.names[i] || 'Bright star', vecAt(i), 6, 1 + D.mag[i] * 0.2, { mag: D.mag[i] });
   // a rocket launch in the last hour from a pad you could see
   if (ctx.launches && ctx.launches.status === 'ready') {
     for (const lnch of ctx.launches.list) {
@@ -562,32 +605,98 @@ function candLine(c) {
   return c.label;
 }
 
-function openUfo() {
+function updateCamPanel(fwd) {
+  const box = root && root.querySelector('#cam-res'); if (!box) return;
+  const list = candidatesAt(fwd, camCircleDeg * 0.6), best = list[0];
+  const html = best
+    ? `<div class="eyebrow">In the circle</div><div class="big">${esc(candLine(best))}</div><div class="sub">${esc(explain(best))}</div>${list.length > 1 ? `<div class="sub" style="margin-top:4px">Also close: ${esc(list.slice(1, 4).map(c => c.label).join(', '))}</div>` : ''}`
+    : `<div class="eyebrow">In the circle</div><div class="big">Nothing known here</div><div class="sub">No planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch near the circle. Tap “Capture” to record it.</div>`;
+  if (box.dataset.h !== html) { box.innerHTML = html; box.dataset.h = html; }
+  const hint = root.querySelector('#cam-hint');
+  const ht = camErr || noData || 'Put the light in the circle · pinch if labels don’t line up';
+  if (hint.textContent !== ht) hint.textContent = ht;
+}
+
+async function enterCam() {
+  S.camMode = true; S.mode = 'live'; S.sel = null; showInfo();
+  S.camFov = +(store.getCache('camFov') || 66);
+  root.classList.add('cam'); updateButtons(); startLive(); camErr = '';
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('not supported here');
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+    if (!S.camMode) { stream.getTracks().forEach(t => t.stop()); stream = null; return; }
+    video = document.createElement('video');
+    video.playsInline = true; video.muted = true; video.autoplay = true; video.className = 'sky-video'; video.srcObject = stream;
+    root.insertBefore(video, cv);
+    await video.play().catch(() => {});
+  } catch (e) { camErr = `Camera unavailable (${e.message}) — showing labels only`; }
+  dirty = true;
+}
+
+function exitCam() {
+  S.camMode = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; if (video) video.remove(); video = null;
+  if (root) root.classList.remove('cam');
+  dirty = true;
+}
+
+function capturePhoto(mark = null) {
+  try {
+    const w = 360, h = Math.round(w * H / W), c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    if (video && video.videoWidth) {
+      const s = Math.max(W / video.videoWidth, H / video.videoHeight), sw = W / s, sh = H / s;
+      x.drawImage(video, (video.videoWidth - sw) / 2, (video.videoHeight - sh) / 2, sw, sh, 0, 0, w, h);
+    } else { x.fillStyle = '#000'; x.fillRect(0, 0, w, h); }
+    x.drawImage(cv, 0, 0, w, h);
+    if (mark && camP) {
+      const p = camP(mark.vec);
+      if (p) {
+        const k = w / W, px = p[0] * k, py = p[1] * k;
+        x.strokeStyle = '#ffd84a'; x.lineWidth = 3; x.beginPath(); x.arc(px, py, 16, 0, 2 * Math.PI); x.stroke();
+        x.font = '700 15px system-ui'; x.lineWidth = 4; x.strokeStyle = '#000a'; x.strokeText(mark.label, px + 21, py + 5);
+        x.fillStyle = '#ffd84a'; x.fillText(mark.label, px + 21, py + 5);
+      }
+    }
+    return c.toDataURL('image/jpeg', 0.62);
+  } catch (e) { return null; }
+}
+
+function openUfo(photo = null, fwdIn = null) {
   if (!lastView || !model) return;
-  const fwd = lastView.fwd, pos = M.vecToAzAlt(fwd);
-  const list = candidatesAt(fwd), best = list[0];
+  const fwd = fwdIn || lastView.fwd, pos = M.vecToAzAlt(fwd);
+  const list = candidatesAt(fwd, S.camMode ? camCircleDeg * 0.6 : 0), best = list[0];
+  const alignable = best && ['planet', 'moon', 'star'].includes(best.kind);
   const where = `${sky.dirName(pos.az)} ${Math.round(pos.az)}° · ${Math.round(pos.alt)}° up`;
   const planesNote = ctx.planes && ctx.planes.status === 'ready' ? '' : '<p class="tip">Plane data isn’t loaded, so aircraft weren’t checked.</p>';
   const nLog = getLog().length;
-  const body = best ? `<div class="card ufo-best"><div class="eyebrow">Most likely</div><div class="big">${esc(candLine(best))}</div>
+  const body = best ? `<div class="card ufo-best"><div class="eyebrow">${S.camMode ? 'Sky Watch says it’s…' : 'Most likely'}</div><div class="big">${esc(candLine(best))}</div>
       <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${best.d < 3 ? 'Right where you’re pointing.' : `About ${Math.round(best.d)}° from where you’re pointing.`}</div>
       <div class="actions"><button class="btn small" data-show="${esc(best.id)}">Show me</button></div></div>
     ${list.length > 1 ? `<h3 class="sect">Also nearby</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
     : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
       <div class="sub" style="margin-top:4px">Nothing Sky Watch knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
-  openSheet(`<div class="sheet-head"><h2>What’s that light?</h2><button class="btn ghost small" data-close>Close</button></div>
+  openSheet(`<div class="sheet-head"><h2>${S.camMode ? (best ? 'Identified!' : 'Hmm…') : 'What’s that light?'}</h2><button class="btn ghost small" data-close>Close</button></div>
+    ${photo ? `<img class="ufo-photo" src="${photo}" alt="">` : ''}
     <p class="sub" style="margin:4px 0 10px">Checked around ${where}. ${S.mode === 'live' ? 'Phone compasses can be off by 5–10°.' : 'Using the centre of the map.'}</p>
     ${body}${planesNote}
+    ${alignable && S.camMode ? `<p class="tip">Is the light in your photo really ${esc(best.label)}? Then <button class="linkbtn" data-align="1">line the compass up with it</button> so every label sits right.</p>` : ''}
     <div class="actions" style="margin-top:12px"><button class="btn ${best ? 'ghost' : ''}" data-log="1">${best ? 'Not it — log as unidentified' : 'Log this sighting'}</button><button class="btn ghost" data-viewlog="1">UFO log (${nLog})</button></div>`,
   (e, close) => {
     const sh = e.target.closest('[data-show]');
-    if (sh) { close(); const id = sh.dataset.show; if (!id.startsWith('launch:')) { select({ id, label: '' }); guide(id); } return; }
-    if (e.target.closest('[data-log]')) { openLogForm(pos, list); return; }
+    if (sh) { close(); const id = sh.dataset.show; if (!S.camMode && !id.startsWith('launch:')) { select({ id, label: '' }); guide(id); } return; }
+    if (e.target.closest('[data-align]')) {
+      const tAz = M.vecToAzAlt(best.vec).az, d = ((tAz - pos.az + 540) % 360) - 180;
+      store.set('azOffset', ((store.get('azOffset') + d) % 360 + 360) % 360);
+      close(); toast(`Compass adjusted by ${d > 0 ? '+' : ''}${d.toFixed(1)}°`); return;
+    }
+    if (e.target.closest('[data-log]')) { openLogForm(pos, list, photo); return; }
     if (e.target.closest('[data-viewlog]')) { openLogList(); }
   });
 }
 
-function openLogForm(pos, list) {
+function openLogForm(pos, list, photo = null) {
   const chips = (name, opts) => `<div class="chips" data-group="${name}">${opts.map(o => `<button class="chip-btn" data-v="${o}">${o}</button>`).join('')}</div>`;
   openSheet(`<div class="sheet-head"><h2>Log a sighting</h2><button class="btn ghost small" data-close>Cancel</button></div>
     <p class="sub" style="margin:4px 0 10px">${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} · ${sky.dirName(pos.az)} ${Math.round(pos.az)}°, ${Math.round(pos.alt)}° up · ${esc(ctx.location().name)}</p>
@@ -604,7 +713,7 @@ function openLogForm(pos, list) {
       const sheet = document.getElementById('sheet');
       const pick = (g) => { const b = sheet.querySelector(`[data-group="${g}"] .on`); return b ? b.dataset.v : ''; };
       const n = addToLog({ t: Date.now(), az: pos.az, alt: pos.alt, place: ctx.location().name, lat: ctx.location().lat, lon: ctx.location().lon,
-        move: pick('move'), color: pick('color'), notes: sheet.querySelector('#ufo-notes').value.trim(), nearby: list.slice(0, 3).map(candLine) });
+        move: pick('move'), color: pick('color'), photo, notes: sheet.querySelector('#ufo-notes').value.trim(), nearby: list.slice(0, 3).map(candLine) });
       close(); toast(`Saved — ${n} in your UFO log`);
     }
   });
@@ -614,7 +723,7 @@ function openLogList() {
   const log = getLog();
   const text = (e) => `${new Date(e.t).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} — ${sky.dirName(e.az)} ${Math.round(e.az)}°, ${Math.round(e.alt)}° up from ${e.place}. ${[e.move, e.color].filter(Boolean).join(', ')}${e.notes ? '. ' + e.notes : ''}`;
   openSheet(`<div class="sheet-head"><h2>UFO log</h2><button class="btn ghost small" data-close>Done</button></div>
-    ${log.length ? `<div class="card">${log.map(e => `<div class="mo"><span class="mo-t">${new Date(e.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}<span class="sub">${fmtTime(new Date(e.t))}</span></span><span class="grow"><b>${sky.dirName(e.az)} · ${Math.round(e.alt)}° up</b><span class="sub">${esc([e.move, e.color].filter(Boolean).join(' · '))}</span>${e.notes ? `<span class="sub">${esc(e.notes)}</span>` : ''}${e.nearby && e.nearby.length ? `<span class="sub">Nearby: ${esc(e.nearby.join('; '))}</span>` : ''}</span><button class="x" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('')}</div>
+    ${log.length ? `<div class="card">${log.map(e => `<div class="mo"><span class="mo-t">${new Date(e.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}<span class="sub">${fmtTime(new Date(e.t))}</span></span><span class="grow">${e.photo ? `<img class="ufo-thumb" src="${e.photo}" alt="">` : ''}<b>${sky.dirName(e.az)} · ${Math.round(e.alt)}° up</b><span class="sub">${esc([e.move, e.color].filter(Boolean).join(' · '))}</span>${e.notes ? `<span class="sub">${esc(e.notes)}</span>` : ''}${e.nearby && e.nearby.length ? `<span class="sub">Nearby: ${esc(e.nearby.join('; '))}</span>` : ''}</span><button class="x" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('')}</div>
       <div class="actions" style="margin-top:12px"><button class="btn ghost" data-share="1">Share / copy log</button></div>`
       : '<div class="card"><div class="muted">No sightings yet. Point at something odd and tap “What’s that light?”.</div></div>'}`,
   (e) => {
@@ -648,11 +757,21 @@ function onClick(e) {
   const b = e.target.closest('[data-a],[data-mode]');
   if (!b) return;
   if (b.dataset.mode) {
+    if (S.camMode) exitCam();
     S.mode = b.dataset.mode; if (S.mode === 'live') startLive(); updateButtons(); dirty = true; return;
   }
   switch (b.dataset.a) {
     case 'layers': openLayers(); break;
-    case 'ufo': openUfo(); break;
+    case 'ufo': enterCam(); break;
+    case 'camclose': exitCam(); break;
+    case 'camcap': {
+      if (scanning || !lastView) break;
+      const fwd = lastView.fwd.slice(), best = candidatesAt(fwd, camCircleDeg * 0.6)[0];
+      const photo = capturePhoto(best);                // grab the moment you asked
+      scanning = performance.now(); dirty = true;
+      setTimeout(() => { scanning = 0; openUfo(photo, fwd); }, 1400);
+      break;
+    }
     case 'find': if (b.closest('#sky-info')) { guide(S.sel.id); } else openFind(); break;
     case 'close': S.sel = null; showInfo(); dirty = true; break;
     case 'point': ctx.go('point', { target: S.sel.id }); break;
@@ -677,7 +796,11 @@ function bindPointer() {
     p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (lastDist > 0) { S.fov = Math.max(12, Math.min(110, S.fov * lastDist / d)); dirty = true; }
+      if (lastDist > 0) {
+        if (S.camMode) { S.camFov = Math.max(30, Math.min(110, S.camFov * lastDist / d)); store.setCache('camFov', S.camFov); }
+        else S.fov = Math.max(12, Math.min(110, S.fov * lastDist / d));
+        dirty = true;
+      }
       lastDist = d; if (start) start.moved = true;
     } else if (pointers.size === 1) {
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) start.moved = true;
@@ -710,6 +833,10 @@ export const skyView = {
       <div class="sky-top">
         <div class="seg"><button data-mode="live">Live</button><button data-mode="free">Drag</button></div>
         <div class="sky-btns"><button class="chip" data-a="find">Find</button><button class="chip" data-a="layers">Layers</button></div>
+      </div>
+      <div class="cam-ui">
+        <div class="cam-top"><span class="chip" id="cam-hint">Put the light in the circle</span><button class="chip" data-a="camclose" aria-label="Close camera">✕</button></div>
+        <div class="cam-panel"><div class="sub" style="margin-bottom:8px">See something odd? Hold it in the circle and ask.</div><button class="btn cam-go" data-a="camcap">🔍 What is this?</button></div>
       </div>
       <div class="sky-ufo"><button class="chip ufo" data-a="ufo">🛸 What’s that light?</button>
       </div>
@@ -744,7 +871,7 @@ export const skyView = {
   },
   tick() { /* animates itself */ },
   unmount() {
-    mounted = false; cancelAnimationFrame(raf);
+    mounted = false; cancelAnimationFrame(raf); exitCam();
     window.removeEventListener('resize', resize);
     if (orient) orient.stop(); orient = null;
     if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }
