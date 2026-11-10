@@ -13,6 +13,10 @@ import { icons, esc, toast } from '../ui.js';
 import { loadGroup, overheadNow } from '../satellites.js';
 import { fmtTime, fmtDayInline } from '../time.js';
 import { col, mix } from '../colors.js';
+import { loadComets, interestingComets, cometAt } from '../comets.js';
+import { loadPlanes, planeLook, kmToMi, ktToMph } from '../planes.js';
+import { assess } from '../launches.js';
+import { getLog, addToLog, removeFromLog, explain } from '../ufo.js';
 
 const A = () => globalThis.Astronomy;
 const RAD = Math.PI / 180, DEG = 180 / Math.PI;
@@ -20,13 +24,13 @@ const RAD = Math.PI / 180, DEG = 180 / Math.PI;
 // State that survives leaving and coming back to the screen.
 const S = {
   mode: 'live', fov: 60, az: 180, alt: 35, offsetMs: 0, target: null, sel: null,
-  layers: { stars: true, names: true, lines: true, conNames: true, planets: true, sats: true, dso: true, grid: false, ground: true },
+  layers: { stars: true, names: true, lines: true, conNames: true, planets: true, sats: true, planes: true, dso: true, grid: false, ground: true },
 };
 try { Object.assign(S.layers, store.getCache('skyLayers') || {}); } catch (e) { /* ignore */ }
 
 const LAYER_LABELS = [
   ['stars', 'Stars'], ['names', 'Star names'], ['lines', 'Constellation lines'], ['conNames', 'Constellation names'],
-  ['planets', 'Sun, Moon & planets'], ['sats', 'Satellites (ISS, Tiangong, Hubble…)'], ['dso', 'Clusters & nebulae'],
+  ['planets', 'Sun, Moon & planets'], ['sats', 'Satellites (ISS, Tiangong, Hubble…)'], ['planes', 'Planes (live, near you)'], ['dso', 'Clusters & nebulae'],
   ['grid', 'Altitude / direction grid'], ['ground', 'Shade below the horizon'],
 ];
 
@@ -57,12 +61,30 @@ function updateModel(force) {
     let mag = 5; try { mag = A().Illumination(n, date).mag; } catch (e) { /* ignore */ }
     add({ id: 'planet:' + n, kind: 'planet', label: n, vec: M.azAltToVec(p.az, p.alt), az: p.az, alt: p.alt, mag, color: ctx.config.sky.planetColors[n] });
   }
+  for (const it of interestingComets(ctx)) {
+    const st = cometAt(it.c, date);
+    const cid = 'comet:' + it.c.id;
+    if (st.mag > ctx.config.comets.mapMag && S.target !== cid && !(S.sel && S.sel.id === cid)) continue;
+    const p = sky.fixedPosition(st.ra, st.dec, date, obs);
+    // tail direction: a point a little further from the Sun along the comet's own radius
+    const k = 0.04 / st.r, tq = [st.geo[0] + st.helioEqj[0] * k, st.geo[1] + st.helioEqj[1] * k, st.geo[2] + st.helioEqj[2] * k];
+    const tr = Math.hypot(...tq), tp = sky.fixedPosition(((Math.atan2(tq[1], tq[0]) * DEG) + 360) % 360, Math.asin(tq[2] / tr) * DEG, date, obs);
+    add({ id: cid, kind: 'comet', label: it.c.id, vec: M.azAltToVec(p.az, p.alt), tail: M.azAltToVec(tp.az, tp.alt), az: p.az, alt: p.alt, mag: st.mag, comet: it.c, st });
+  }
   const dark = sun.alt < -4;
   const sats = [];
   if (S.layers.sats) {
     for (const s of overheadNow(ctx, l, date, ctx.config.sats.overheadMinEl)) {
       const o = { id: 'sat:' + s.id, kind: 'sat', label: s.name, vec: M.azAltToVec(s.az, s.el), az: s.az, alt: s.el, rangeKm: s.rangeKm, sunlit: s.sunlit, seen: s.sunlit && dark };
       add(o); sats.push(o);
+    }
+  }
+  if (S.layers.planes && S.offsetMs === 0 && ctx.planes && ctx.planes.list.length) {
+    for (const pl of ctx.planes.list) {
+      const lk = planeLook(pl, l, date.getTime());
+      if (lk.el < ctx.config.planes.minEl) continue;
+      const ahead = planeLook(pl, l, date.getTime() + 20000);
+      add({ id: 'plane:' + pl.id, kind: 'plane', label: pl.call, vec: M.azAltToVec(lk.az, lk.el), next: M.azAltToVec(ahead.az, ahead.el), az: lk.az, alt: lk.el, plane: pl, look: lk });
     }
   }
   model = { date, obs, sunAlt: sun.alt, objs, sats };
@@ -241,6 +263,21 @@ function draw() {
   if (L.planets) {
     for (const o of model.objs.values()) {
       if (o.kind === 'sat') continue;
+      if (o.kind === 'comet') {
+        const p = P(o.vec), pt = P(o.tail);
+        if (!onScr(p, 40)) continue;
+        if (pt) {
+          let dx = pt[0] - p[0], dy = pt[1] - p[1]; const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+          const len = Math.max(14, 46 - o.mag * 3.2) * Math.min(1.8, 60 / S.fov);
+          const tg = g.createLinearGradient(p[0], p[1], p[0] + dx * len, p[1] + dy * len);
+          tg.addColorStop(0, col('#bff6ea')); tg.addColorStop(1, 'rgba(160,240,225,0)');
+          g.strokeStyle = tg; g.lineWidth = 3.2; g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(p[0] + dx * len, p[1] + dy * len); g.stroke();
+        }
+        g.fillStyle = col('#d8fff6'); g.beginPath(); g.arc(p[0], p[1], 3, 0, 2 * Math.PI); g.fill();
+        g.font = '600 11px system-ui'; g.fillStyle = col('#a6f0e0'); g.fillText('Comet ' + o.label, p[0] + 10, p[1] + 14);
+        hits.push({ x: p[0], y: p[1], id: o.id, label: o.label, pri: 11 });
+        continue;
+      }
       const p = P(o.vec);
       if (!onScr(p, 40)) continue;
       if (o.kind === 'sun') {
@@ -259,6 +296,28 @@ function draw() {
       g.font = '600 11px system-ui'; g.fillStyle = col(o.kind === 'sun' ? '#ffe27a' : '#f3f0e6');
       g.fillText(o.label, p[0] + 12, p[1] - 8);
       hits.push({ x: p[0], y: p[1], id: o.id, label: o.label, pri: 12 });
+    }
+  }
+
+  // planes
+  if (L.planes) {
+    const blink = Math.floor(performance.now() / 600) % 2;
+    for (const o of model.objs.values()) {
+      if (o.kind !== 'plane') continue;
+      const p = P(o.vec); if (!onScr(p, 30)) continue;
+      const q = P(o.next); const ang = q ? Math.atan2(q[1] - p[1], q[0] - p[0]) : 0;
+      g.save(); g.translate(p[0], p[1]); g.rotate(ang);
+      g.fillStyle = col('#e9eef7');
+      g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, -2); g.lineTo(-7, 0); g.lineTo(-6, 2); g.closePath(); g.fill();      // fuselage
+      g.beginPath(); g.moveTo(2, 0); g.lineTo(-3, -8); g.lineTo(-5, -8); g.lineTo(-2, 0); g.lineTo(-5, 8); g.lineTo(-3, 8); g.closePath(); g.fill();  // wings
+      g.fillStyle = col(blink ? '#ff4d4d' : '#3a1010'); g.fillRect(-4.5, -9, 2.2, 2.2);
+      g.fillStyle = col(blink ? '#4dff88' : '#0f3a1d'); g.fillRect(-4.5, 7, 2.2, 2.2);
+      g.restore();
+      if (S.fov < 85 || o.look.rangeKm < 40) {
+        g.font = '10px system-ui'; g.fillStyle = col('#cdd6e6');
+        g.fillText(`${o.label} · ${Math.round(o.look.altFt / 100) * 100 >= 1000 ? (Math.round(o.look.altFt / 100) * 100).toLocaleString() : Math.round(o.look.altFt)} ft`, p[0] + 11, p[1] - 6);
+      }
+      hits.push({ x: p[0], y: p[1], id: o.id, label: o.label, pri: 9 });
     }
   }
 
@@ -373,6 +432,15 @@ function describe(id) {
   else if (id === 'moon') { const m = sky.moonInfo(date, obs); sub = `${m.name} · ${Math.round(m.fraction * 100)}% lit`; rs('Moon'); if (m.nextFull) rows.push(['Next full', fmtDayInline(m.nextFull)]); }
   else if (id.startsWith('planet:')) { const p = sky.planetInfo(id.slice(7), date, obs); sub = `Planet · magnitude ${p.mag.toFixed(1)} · ${Math.round(p.elong)}° from the Sun`; rs(id.slice(7)); }
   else if (id.startsWith('sat:')) { const o = model.objs.get(id); sub = o ? `Satellite · ${Math.round(o.rangeKm)} km away · ${o.seen ? 'sunlit — visible to the eye' : o.sunlit ? 'sunlit, but the sky is too bright' : 'in Earth’s shadow — can’t be seen'}` : 'Satellite'; }
+  else if (id.startsWith('plane:')) {
+    const o = model.objs.get(id);
+    if (o) { const p = o.plane, lk = o.look; title = p.call; sub = `${p.desc || p.type || 'Aircraft'}${p.ownOp ? ' · ' + p.ownOp : ''}`;
+      rows.push(['Altitude', `${Math.round(lk.altFt).toLocaleString()} ft${p.vrate > 300 ? ' · climbing' : p.vrate < -300 ? ' · descending' : ''}`]);
+      rows.push(['Speed', `${Math.round(ktToMph(p.gsKt))} mph heading ${sky.dirName(p.track)}`]);
+      rows.push(['Distance', `${Math.round(kmToMi(lk.rangeKm))} miles away`]);
+      if (p.reg) rows.push(['Registration', p.reg]); }
+  }
+  else if (id.startsWith('comet:')) { const o = model.objs.get(id); if (o) { title = o.comet.name; sub = `Comet · about magnitude ${o.mag.toFixed(1)} (${o.mag <= 6 ? 'naked eye' : o.mag <= 9 ? 'binoculars' : 'telescope'}) · ${o.st.delta.toFixed(2)} AU away`; rows.push(['Brightness', 'a rough guess — comets surprise']); } }
   else if (id.startsWith('star:')) { const i = +id.slice(5), D = skyData(); sub = `Star · magnitude ${D.mag[i].toFixed(1)}`; if (!D.raw.names[i]) title = 'Unnamed star'; }
   else if (id.startsWith('dso:')) { const d = skyData().raw.dso[+id.slice(4)]; const kinds = { oc: 'Open cluster', gc: 'Globular cluster', g: 'Galaxy', gn: 'Nebula', pn: 'Planetary nebula', en: 'Nebula', sn: 'Supernova remnant' }; title = d[5] || d[4]; sub = `${kinds[d[3]] || 'Deep-sky object'} · ${d[4]} · mag ${d[2]}`; }
   return { title, sub, pos, rows };
@@ -424,6 +492,7 @@ function openLayers() {
     const k = e.target.dataset.k; if (!k) return;
     S.layers[k] = e.target.checked; store.setCache('skyLayers', S.layers);
     if (k === 'sats' && e.target.checked) { loadGroup(ctx); }
+    if (k === 'planes' && e.target.checked) { loadPlanes(ctx, { force: true }); }
     updateModel(true); dirty = true;
   };
 }
@@ -433,7 +502,7 @@ function openFind() {
   const rows = [];
   for (const o of model.objs.values()) {
     if (o.kind === 'sat' && !['iss', 'css', 'hst'].some(k => o.id === 'sat:' + k)) continue;
-    rows.push({ id: o.id, label: o.label, az: o.az, alt: o.alt, group: o.kind === 'sat' ? 'Satellites' : 'Solar system' });
+    rows.push({ id: o.id, label: o.kind === 'comet' ? 'Comet ' + o.label : o.kind === 'plane' ? `${o.label} · ${Math.round(kmToMi(o.look.rangeKm))} mi` : o.label, az: o.az, alt: o.alt, range: o.look ? o.look.rangeKm : 0, group: o.kind === 'sat' ? 'Satellites' : o.kind === 'comet' ? 'Comets' : o.kind === 'plane' ? 'Planes' : 'Solar system' });
   }
   const D = skyData();
   const stars = [];
@@ -442,12 +511,121 @@ function openFind() {
   const line = (r) => `<button class="srow find" data-id="${r.id}"><span>${esc(r.label)}</span><span class="${r.alt > 0 ? 'good' : 'muted'}">${r.alt > 0 ? sky.dirName(r.az) + ' · ' + Math.round(r.alt) + '° up' : 'below horizon'}</span></button>`;
   const sec = (name, list) => list.length ? `<div class="eyebrow" style="margin:14px 0 6px">${name}</div><div class="card">${list.map(line).join('')}</div>` : '';
   openSheet(`<div class="sheet-head"><h2>Find something</h2><button class="btn ghost small" data-close>Cancel</button></div>
-    ${sec('Solar system', rows.filter(r => r.group === 'Solar system'))}${sec('Satellites', rows.filter(r => r.group === 'Satellites'))}${sec('Bright stars', stars)}`,
+    ${sec('Solar system', rows.filter(r => r.group === 'Solar system'))}${sec('Comets', rows.filter(r => r.group === 'Comets'))}${sec('Planes overhead', rows.filter(r => r.group === 'Planes').sort((a, b) => a.range - b.range).slice(0, 15))}${sec('Satellites', rows.filter(r => r.group === 'Satellites'))}${sec('Bright stars', stars)}`,
   (e, close) => {
     const b = e.target.closest('[data-id]'); if (!b) return;
     close(); S.target = null; select({ id: b.dataset.id, label: '' }); guide(b.dataset.id);
   });
   void date;
+}
+
+// ---------- "What's that light?" ----------
+
+function candidatesAt(fwd) {
+  const out = [];
+  const dark = model.sunAlt < -4;
+  const consider = (kind, id, label, vec, tol, weight, extra = {}) => {
+    if (!vec || vec[2] < -0.05) return;
+    const d = M.angleBetween(vec, fwd);
+    if (d <= tol) out.push({ kind, id, label, d, score: d / tol * weight, ...extra });
+  };
+  for (const o of model.objs.values()) {
+    if (o.kind === 'sun') consider('sun', o.id, 'Sun', o.vec, 12, 0.5);
+    else if (o.kind === 'moon') consider('moon', o.id, 'Moon', o.vec, 12, 0.4);
+    else if (o.kind === 'planet' && o.mag < 2.5 && (dark || o.mag < -3)) consider('planet', o.id, o.label, o.vec, 10, o.mag < -2 ? 0.5 : 0.8, { mag: o.mag });
+    else if (o.kind === 'comet' && dark && o.mag < 7) consider('comet', o.id, 'Comet ' + o.label, o.vec, 6, 1);
+    else if (o.kind === 'plane') consider('plane', o.id, o.label, o.vec, 12, 0.7, { plane: o.plane, look: o.look });
+    else if (o.kind === 'sat') {
+      const train = /^sat:sl/.test(o.id);
+      if (o.seen || train) consider(train ? 'train' : 'sat', o.id, o.label, o.vec, 10, train ? 0.6 : 0.9, { seen: o.seen });
+    }
+  }
+  const D = skyData();
+  if (D && dark) for (let i = 0; i < D.nStars && D.mag[i] < 1.8; i++) consider('star', 'star:' + i, D.raw.names[i] || 'Bright star', vecAt(i), 6, 1 + D.mag[i] * 0.2, { mag: D.mag[i] });
+  // a rocket launch in the last hour from a pad you could see
+  if (ctx.launches && ctx.launches.status === 'ready') {
+    for (const lnch of ctx.launches.list) {
+      const age = (model.date - lnch.net) / 60000;
+      if (age < -2 || age > 45) continue;
+      const v = assess(lnch, ctx.location(), ctx.config.launches);
+      if (v.level !== 'likely' && v.level !== 'maybe') continue;
+      const dirAz = { N: 0, NNE: 22.5, NE: 45, ENE: 67.5, E: 90, ESE: 112.5, SE: 135, SSE: 157.5, S: 180, SSW: 202.5, SW: 225, WSW: 247.5, W: 270, WNW: 292.5, NW: 315, NNW: 337.5 }[v.dir] || 0;
+      consider('launch', 'launch:' + lnch.id, lnch.name, M.azAltToVec(dirAz, 12), 30, 0.7);
+    }
+  }
+  return out.sort((a, b) => a.score - b.score);
+}
+
+function candLine(c) {
+  if (c.kind === 'plane') return `${c.label}${c.plane.type ? ' (' + c.plane.type + ')' : ''} · ${Math.round(c.look.altFt).toLocaleString()} ft · ${Math.round(kmToMi(c.look.rangeKm))} mi away`;
+  if (c.mag != null) return `${c.label} · magnitude ${c.mag.toFixed(1)}`;
+  return c.label;
+}
+
+function openUfo() {
+  if (!lastView || !model) return;
+  const fwd = lastView.fwd, pos = M.vecToAzAlt(fwd);
+  const list = candidatesAt(fwd), best = list[0];
+  const where = `${sky.dirName(pos.az)} ${Math.round(pos.az)}° · ${Math.round(pos.alt)}° up`;
+  const planesNote = ctx.planes && ctx.planes.status === 'ready' ? '' : '<p class="tip">Plane data isn’t loaded, so aircraft weren’t checked.</p>';
+  const nLog = getLog().length;
+  const body = best ? `<div class="card ufo-best"><div class="eyebrow">Most likely</div><div class="big">${esc(candLine(best))}</div>
+      <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${best.d < 3 ? 'Right where you’re pointing.' : `About ${Math.round(best.d)}° from where you’re pointing.`}</div>
+      <div class="actions"><button class="btn small" data-show="${esc(best.id)}">Show me</button></div></div>
+    ${list.length > 1 ? `<h3 class="sect">Also nearby</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
+    : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
+      <div class="sub" style="margin-top:4px">Nothing Sky Watch knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
+  openSheet(`<div class="sheet-head"><h2>What’s that light?</h2><button class="btn ghost small" data-close>Close</button></div>
+    <p class="sub" style="margin:4px 0 10px">Checked around ${where}. ${S.mode === 'live' ? 'Phone compasses can be off by 5–10°.' : 'Using the centre of the map.'}</p>
+    ${body}${planesNote}
+    <div class="actions" style="margin-top:12px"><button class="btn ${best ? 'ghost' : ''}" data-log="1">${best ? 'Not it — log as unidentified' : 'Log this sighting'}</button><button class="btn ghost" data-viewlog="1">UFO log (${nLog})</button></div>`,
+  (e, close) => {
+    const sh = e.target.closest('[data-show]');
+    if (sh) { close(); const id = sh.dataset.show; if (!id.startsWith('launch:')) { select({ id, label: '' }); guide(id); } return; }
+    if (e.target.closest('[data-log]')) { openLogForm(pos, list); return; }
+    if (e.target.closest('[data-viewlog]')) { openLogList(); }
+  });
+}
+
+function openLogForm(pos, list) {
+  const chips = (name, opts) => `<div class="chips" data-group="${name}">${opts.map(o => `<button class="chip-btn" data-v="${o}">${o}</button>`).join('')}</div>`;
+  openSheet(`<div class="sheet-head"><h2>Log a sighting</h2><button class="btn ghost small" data-close>Cancel</button></div>
+    <p class="sub" style="margin:4px 0 10px">${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} · ${sky.dirName(pos.az)} ${Math.round(pos.az)}°, ${Math.round(pos.alt)}° up · ${esc(ctx.location().name)}</p>
+    <div class="card stack" style="gap:10px">
+      <div><div class="eyebrow">How was it moving?</div>${chips('move', ['Still', 'Slow', 'Fast', 'Zig-zag', 'Hovered then shot off'])}</div>
+      <div><div class="eyebrow">Colour</div>${chips('color', ['White', 'Orange', 'Red', 'Green', 'Blue', 'Changing'])}</div>
+      <div><div class="eyebrow">Notes</div><textarea id="ufo-notes" rows="3" placeholder="Shape, how long you saw it, sounds…"></textarea></div>
+    </div>
+    <div class="actions" style="margin-top:12px"><button class="btn" data-save="1">Save to UFO log</button></div>`,
+  (e, close) => {
+    const c = e.target.closest('[data-v]');
+    if (c) { c.parentElement.querySelectorAll('.chip-btn').forEach(x => x.classList.toggle('on', x === c)); return; }
+    if (e.target.closest('[data-save]')) {
+      const sheet = document.getElementById('sheet');
+      const pick = (g) => { const b = sheet.querySelector(`[data-group="${g}"] .on`); return b ? b.dataset.v : ''; };
+      const n = addToLog({ t: Date.now(), az: pos.az, alt: pos.alt, place: ctx.location().name, lat: ctx.location().lat, lon: ctx.location().lon,
+        move: pick('move'), color: pick('color'), notes: sheet.querySelector('#ufo-notes').value.trim(), nearby: list.slice(0, 3).map(candLine) });
+      close(); toast(`Saved — ${n} in your UFO log`);
+    }
+  });
+}
+
+function openLogList() {
+  const log = getLog();
+  const text = (e) => `${new Date(e.t).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} — ${sky.dirName(e.az)} ${Math.round(e.az)}°, ${Math.round(e.alt)}° up from ${e.place}. ${[e.move, e.color].filter(Boolean).join(', ')}${e.notes ? '. ' + e.notes : ''}`;
+  openSheet(`<div class="sheet-head"><h2>UFO log</h2><button class="btn ghost small" data-close>Done</button></div>
+    ${log.length ? `<div class="card">${log.map(e => `<div class="mo"><span class="mo-t">${new Date(e.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}<span class="sub">${fmtTime(new Date(e.t))}</span></span><span class="grow"><b>${sky.dirName(e.az)} · ${Math.round(e.alt)}° up</b><span class="sub">${esc([e.move, e.color].filter(Boolean).join(' · '))}</span>${e.notes ? `<span class="sub">${esc(e.notes)}</span>` : ''}${e.nearby && e.nearby.length ? `<span class="sub">Nearby: ${esc(e.nearby.join('; '))}</span>` : ''}</span><button class="x" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('')}</div>
+      <div class="actions" style="margin-top:12px"><button class="btn ghost" data-share="1">Share / copy log</button></div>`
+      : '<div class="card"><div class="muted">No sightings yet. Point at something odd and tap “What’s that light?”.</div></div>'}`,
+  (e) => {
+    const d = e.target.closest('[data-del]');
+    if (d) { removeFromLog(+d.dataset.del); openLogList(); return; }
+    if (e.target.closest('[data-share]')) {
+      const all = 'Sky Watch UFO log\n\n' + log.map(text).join('\n');
+      if (navigator.share) navigator.share({ title: 'UFO log', text: all }).catch(() => {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(all).then(() => toast('Copied to clipboard'));
+    }
+  });
 }
 
 // ---------- controls ----------
@@ -474,6 +652,7 @@ function onClick(e) {
   }
   switch (b.dataset.a) {
     case 'layers': openLayers(); break;
+    case 'ufo': openUfo(); break;
     case 'find': if (b.closest('#sky-info')) { guide(S.sel.id); } else openFind(); break;
     case 'close': S.sel = null; showInfo(); dirty = true; break;
     case 'point': ctx.go('point', { target: S.sel.id }); break;
@@ -532,6 +711,8 @@ export const skyView = {
         <div class="seg"><button data-mode="live">Live</button><button data-mode="free">Drag</button></div>
         <div class="sky-btns"><button class="chip" data-a="find">Find</button><button class="chip" data-a="layers">Layers</button></div>
       </div>
+      <div class="sky-ufo"><button class="chip ufo" data-a="ufo">🛸 What’s that light?</button>
+      </div>
       <div id="sky-hud" class="sky-hud"></div>
       <div id="sky-note" class="sky-note hidden"></div>
       <button class="chip stop hidden" data-a="stopguide">Stop guiding</button>
@@ -550,10 +731,15 @@ export const skyView = {
     if (S.mode === 'live') startLive();
     resize(); updateButtons();
     if (S.layers.sats && ctx.sats.group.status === 'idle') loadGroup(ctx);
+    if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
+    const pollPlanes = () => { if (S.layers.planes && document.visibilityState === 'visible') loadPlanes(ctx); };
+    pollPlanes(); this._planeTimer = setInterval(pollPlanes, ctx.config.planes.refreshSec * 1000);
+    this._off4 = ctx.bus.on('planes', () => { if (ready) { updateModel(true); dirty = true; } });
     loadSkyData().then(() => { if (!mounted) return; ready = true; updateModel(true); if (S.target) { const t = vecOf(S.target); if (t && S.mode === 'free') { const p = M.vecToAzAlt(t.vec); S.az = p.az; S.alt = p.alt; } } dirty = true; })
       .catch((e) => { root.querySelector('#sky-note').textContent = 'Couldn’t load star data: ' + e.message; root.querySelector('#sky-note').classList.remove('hidden'); });
     this._off = ctx.bus.on('sats', () => { if (ready) { updateModel(true); dirty = true; } });
     this._off2 = ctx.bus.on('iss', () => { if (ready) { updateModel(true); dirty = true; } });
+    this._off3 = ctx.bus.on('comets', () => { if (ready) { updateModel(true); dirty = true; } });
     raf = requestAnimationFrame(frame);
   },
   tick() { /* animates itself */ },
@@ -562,7 +748,7 @@ export const skyView = {
     window.removeEventListener('resize', resize);
     if (orient) orient.stop(); orient = null;
     if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }
-    if (this._off) this._off(); if (this._off2) this._off2();
+    if (this._off) this._off(); if (this._off2) this._off2(); if (this._off3) this._off3(); if (this._off4) this._off4(); clearInterval(this._planeTimer);
     if (root && root.parentElement) root.parentElement.classList.remove('edge');
     root = null; cv = null; g = null; pointers.clear();
   },

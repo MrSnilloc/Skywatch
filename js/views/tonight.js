@@ -6,6 +6,7 @@ import { buildPlan } from '../outlook.js';
 import { fetchClouds, avgCloud, cloudVerdict } from '../weather.js';
 import { loadSat, loadStarlink, starlinkState } from '../satellites.js';
 import { loadLaunches } from '../launches.js';
+import { loadComets } from '../comets.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
 
@@ -63,14 +64,94 @@ function timelineHTML(p) {
   const ticks = [];
   const first = new Date(Math.ceil(a / 3600e3) * 3600e3);
   for (let t = first.getTime(), n = 0; t < b && n < 14; t += 3600e3, n++) if (new Date(t).getHours() % 2 === 0) ticks.push(`<span style="left:${x(t)}%">${fmtTime(new Date(t)).replace(':00', '').replace(' ', '')}</span>`);
-  return `<div class="card tl"><div class="eyebrow">Timeline</div>${rows.join('')}<div class="tl-row"><span class="tl-l"></span><div class="tl-axis">${ticks.join('')}</div></div></div>`;
+  return `<button class="card tl tap" data-act="timeline"><div class="tl-top"><span class="eyebrow">Timeline</span><span class="sub">Tap for details ›</span></div>${rows.join('')}<div class="tl-row"><span class="tl-l"></span><div class="tl-axis">${ticks.join('')}</div></div></button>`;
+}
+
+// ---------- expanded timeline (sheet) ----------
+
+/** Every moment worth knowing tonight, in time order: [{t, until?, key, label, detail, color}] */
+function momentList(p) {
+  const out = [], tw = p.twilight, now = Date.now();
+  const add = (t, key, label, detail, color, until) => { if (t && (until || t).getTime() >= now - 5 * 60e3) out.push({ t, until, key, label, detail, color }); };
+  if (!p.night.isNow) add(p.night.start, 'sky', 'Sunset', 'The Sun goes down — bright planets start to show', '#ffb454');
+  add(tw.civilEnd, 'sky', 'Twilight deepens', 'Bright stars and planets easy to see', '#a58bff');
+  add(tw.nauticalEnd, 'sky', 'Getting dark', 'Most stars visible; satellites still sunlit', '#a58bff');
+  add(tw.astroEnd, 'sky', 'Fully dark', 'Best for meteors and faint objects', '#62f0a5');
+  add(tw.astroStart, 'sky', 'Dawn begins', 'Sky starts to brighten', '#a58bff');
+  add(tw.civilStart, 'sky', 'Bright twilight', 'Only the brightest planets remain', '#a58bff');
+  add(p.night.end, 'sky', 'Sunrise', '', '#ffb454');
+  const m = p.moon;
+  if (m.from && m.from.getTime() > p.night.start.getTime() + 20 * 60e3) add(m.from, 'moon', 'Moonrise', `${Math.round(m.fraction * 100)}% lit`, '#e9e4d2');
+  if (m.peak && m.peak.alt > 10 && m.peak.t - m.from > 40 * 60e3 && m.to - m.peak.t > 40 * 60e3) add(m.peak.t, 'moon', 'Moon highest', `${dirOf(m.peak.az)}, ${Math.round(m.peak.alt)}° up`, '#e9e4d2');
+  if (m.to && m.to.getTime() < p.night.end.getTime() - 20 * 60e3) add(m.to, 'moon', 'Moonset', m.fraction > 0.5 ? 'Darker skies after this' : '', '#e9e4d2');
+  for (const q of p.planets) {
+    const c = ctx.config.sky.planetColors[q.name], k = 'planet:' + q.name;
+    if (q.from && q.from.getTime() > p.night.start.getTime() + 30 * 60e3) add(q.from, k, `${q.name} climbs into view`, 'More than 10° above the horizon', c);
+    add(q.best.t, k, `${q.name} at its best`, `${dirOf(q.best.az)}, ${Math.round(q.best.alt)}° up · mag ${q.mag.toFixed(1)}${q.far ? ' · telescope' : ''}`, c);
+    if (q.to && q.to.getTime() < p.night.end.getTime() - 30 * 60e3) add(q.to, k, `${q.name} gets low`, 'Drops below 10°', c);
+  }
+  for (const it of p.items) {
+    if (it.kind === 'planet') continue;
+    const key = it.kind === 'pass' ? 'pass' : it.kind === 'shower' ? 'shower' : it.kind === 'launch' ? 'launch' : it.kind === 'comet' ? 'comet' : 'event';
+    const color = { pass: '#5cc8ff', shower: '#62f0a5', launch: '#ff7a7a', event: '#ffb454', comet: '#7fe3d0' }[key];
+    add(it.when, key, it.title, fill(it), color, it.until && it.until - it.when > 120e3 ? it.until : null);
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
+function bigTimelineHTML(p, filter) {
+  const a = Math.max(Date.now(), p.night.start.getTime()) - 30 * 60e3, b = p.night.end.getTime() + 15 * 60e3;
+  const x = (t) => PCT(t instanceof Date ? t.getTime() : t, a, b);
+  const bar = (from, to, cls, style = '', txt = '') => `<i class="tl-bar ${cls}" style="left:${x(from)}%;width:${Math.max(1, x(to) - x(from))}%;${style}">${txt}</i>`;
+  const row = (key, label, inner) => `<button class="tl-row ${filter && filter !== key ? 'dimmed' : ''} ${filter === key ? 'sel' : ''}" data-row="${key}"><span class="tl-l">${esc(label)}</span><div class="tl-track">${inner}</div></button>`;
+  const tw = p.twilight, rows = [];
+  // sky darkness bands
+  const sk = [[p.night.start, tw.civilEnd, '#3b3f7a'], [tw.civilEnd, tw.nauticalEnd, '#2a2d63'], [tw.nauticalEnd, tw.astroEnd, '#1b1d47'], [tw.astroEnd, tw.astroStart, '#0b0c22'],
+    [tw.astroStart, tw.nauticalStart, '#1b1d47'], [tw.nauticalStart, tw.civilStart, '#2a2d63'], [tw.civilStart, p.night.end, '#3b3f7a']];
+  rows.push(row('sky', 'Sky', sk.filter(s => s[0] && s[1] && s[1] > s[0]).map(s => bar(s[0], s[1], '', `background:${s[2]};border-radius:0`)).join('')));
+  if (clouds) rows.push(row('cloud', 'Cloud', clouds.filter(h => h.t.getTime() + 3600e3 > a && h.t.getTime() < b).map(h => bar(Math.max(a, h.t.getTime()), Math.min(b, h.t.getTime() + 3600e3), 'cl', `opacity:${(0.15 + h.cloud / 100 * 0.8).toFixed(2)}`, `<b>${Math.round(h.cloud)}</b>`)).join('')));
+  if (p.moon.from) rows.push(row('moon', 'Moon', bar(p.moon.from, p.moon.to, 'mn')));
+  for (const q of p.planets) rows.push(row('planet:' + q.name, q.name, bar(q.from || q.best.t, q.to || q.best.t, 'pl', `background:${ctx.config.sky.planetColors[q.name]}${q.far ? ';opacity:.5' : ''}`) + `<i class="tl-dot" style="left:${x(q.best.t)}%"></i>`));
+  const kinds = [['comet', 'Comets', 'cm'], ['pass', 'Satellites', 'ps'], ['shower', 'Meteors', 'sh'], ['launch', 'Launches', 'ln'], ['event', 'Events', 'ev']];
+  for (const [k, lab, cls] of kinds) {
+    const its = p.items.filter(i => (k === 'event' ? i.kind === 'event' : i.kind === k));
+    if (its.length) rows.push(row(k, lab, its.map(i => bar(i.when, i.until && i.until > i.when ? i.until : new Date(i.when.getTime() + 6 * 60e3), cls)).join('')));
+  }
+  const ticks = [];
+  const stepH = (b - a) / 3600e3 > 9 ? 2 : 1;
+  for (let t = Math.ceil(a / 3600e3) * 3600e3; t < b; t += 3600e3) if (new Date(t).getHours() % stepH === 0) ticks.push(`<span style="left:${x(t)}%">${fmtTime(new Date(t)).replace(':00', '').replace(' ', '')}</span>`);
+  const nowX = Date.now() > a && Date.now() < b ? `<i class="tl-now" style="left:calc(70px + (100% - 70px) * ${x(Date.now()) / 100})"></i>` : '';
+  return `<div class="tl-big">${nowX}${rows.join('')}<div class="tl-row axis"><span class="tl-l"></span><div class="tl-axis">${ticks.join('')}</div></div></div>`;
+}
+
+function openTimeline(filter = null) {
+  const p = plan; if (!p) return;
+  const sheet = document.getElementById('sheet');
+  const list = momentList(p).filter(m => !filter || m.key === filter || (filter === 'cloud' && false));
+  const cloudAt = (t) => { if (!clouds) return ''; const h = clouds.find(c => c.t.getTime() <= t && c.t.getTime() + 3600e3 > t); return h ? `${Math.round(h.cloud)}% cloud` : ''; };
+  const items = (filter === 'cloud' && clouds)
+    ? clouds.filter(h => h.t.getTime() + 3600e3 > Date.now() && h.t <= p.night.end).map(h => { const v = cloudVerdict(h.cloud); return `<div class="mo"><span class="mo-t">${fmtTime(h.t)}</span><span class="mo-dot" style="background:#9db0c9"></span><span class="grow"><b>${Math.round(h.cloud)}% cloud</b><span class="sub">${v.label}</span></span></div>`; }).join('')
+    : list.map(m => `<div class="mo"><span class="mo-t">${fmtTime(m.t)}${m.until ? `<span class="sub">– ${fmtTime(m.until)}</span>` : ''}</span><span class="mo-dot" style="background:${m.color}"></span><span class="grow"><b>${esc(m.label)}</b>${m.detail ? `<span class="sub">${esc(m.detail)}</span>` : ''}${clouds && m.key !== 'sky' ? `<span class="sub mo-c">${cloudAt(m.t.getTime())}</span>` : ''}</span></div>`).join('');
+  sheet.innerHTML = `<div class="sheet-card tall">
+    <div class="sheet-head"><h2>${p.sunAlt > 0 ? 'Tonight' : 'Rest of tonight'}</h2><button class="btn ghost small" data-close>Done</button></div>
+    <p class="sub" style="margin:4px 0 10px">${fmtDay(p.night.start)} ${fmtTime(p.night.start)} → ${fmtDay(p.night.end)} ${fmtTime(p.night.end)} · tap a row to see just that</p>
+    <div class="card" style="padding:12px 10px">${bigTimelineHTML(p, filter)}</div>
+    <h3 class="sect">${filter ? 'Showing one row · <button class="linkbtn" data-row="">show everything</button>' : 'Hour by hour'}</h3>
+    <div class="card mo-list">${items || '<div class="muted">Nothing else in this row tonight.</div>'}</div>
+  </div>`;
+  sheet.classList.remove('hidden');
+  sheet.onclick = (e) => {
+    if (e.target === sheet || e.target.closest('[data-close]')) { sheet.classList.add('hidden'); sheet.innerHTML = ''; return; }
+    const r = e.target.closest('[data-row]');
+    if (r) openTimeline(r.dataset.row && r.dataset.row !== filter ? r.dataset.row : null);
+  };
 }
 
 const fill = (it) => it.detail.replace('%T', fmtTime(it.when)).replace('%P', fmtTime(it.peak || it.when));
 
 function cardHTML(it) {
-  const ic = it.kind === 'launch' ? icons.rocket : it.kind === 'pass' ? icons.iss : it.kind === 'shower' ? icons.showers : icons.events;
-  const attr = it.sat ? `data-sat="${it.sat}"` : it.go ? `data-go="${it.go}" ${it.section ? `data-sec="${it.section}"` : ''}` : '';
+  const ic = it.kind === 'comet' ? '<b style="font-size:19px">☄</b>' : it.kind === 'launch' ? icons.rocket : it.kind === 'pass' ? icons.iss : it.kind === 'shower' ? icons.showers : icons.events;
+  const attr = it.target ? `data-target="${it.target}"` : it.sat ? `data-sat="${it.sat}"` : it.go ? `data-go="${it.go}" ${it.section ? `data-sec="${it.section}"` : ''}` : '';
   const timeTxt = it.noTime ? fmtDay(it.when) : `${it.day ? 'Daytime · ' : ''}${fmtDay(it.when)} ${fmtTime(it.when)}${it.until && it.until - it.when > 120e3 ? ' – ' + fmtTime(it.until) : ''}`;
   return `<button class="card tap lu-card ${it.score >= 80 ? 'hot' : ''}" ${attr}>
     <span class="lu-ic">${ic}</span>
@@ -113,6 +194,7 @@ async function getClouds() {
 }
 
 function onClick(e) {
+  if (e.target.closest('[data-act="timeline"]')) { openTimeline(); return; }
   const t = e.target.closest('[data-target],[data-go],[data-sat]');
   if (!t) return;
   if (t.dataset.sat) ctx.go('passes', { sat: t.dataset.sat });
@@ -136,10 +218,12 @@ export const tonightView = {
     });
     if (starlinkState(ctx).status === 'idle') satTimers.push(setTimeout(() => loadStarlink(ctx), 7000));
     if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx);
+    if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
+    this._offC = ctx.bus.on('comets', () => render());
     this._offL = ctx.bus.on('launches', () => render());
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
   tick() { if (root && Date.now() - planAt > 60000) render(); },
-  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
+  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
 void sky;

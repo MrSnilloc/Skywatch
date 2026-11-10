@@ -7,6 +7,8 @@ import { visiblePasses } from './issService.js';
 import { eventData } from './events.js';
 import { moonRating } from './showers.js';
 import { assess } from './launches.js';
+import { interestingComets, bestTonight, cometAt } from './comets.js';
+import * as skyMod from './sky.js';
 
 const A = () => globalThis.Astronomy;
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -161,6 +163,16 @@ export function buildPlan(ctx, now = new Date()) {
       detail: `${v.label} · look ${v.dir} · ${l.pad.where}`, go: 'events', section: 'launches' });
   }
 
+  // ----- comets bright enough to see -----
+  for (const it of interestingComets(ctx, now)) {
+    if (it.now.mag > cfg.comets.binocularMag) continue;
+    const bt = bestTonight(it.c, obs, now, skyMod);
+    if (!bt || bt.alt < 8) continue;
+    const eye = it.now.mag <= cfg.comets.nakedEyeMag;
+    items.push({ kind: 'comet', when: bt.t, title: `Comet ${it.c.id}`, score: eye ? 82 : 48,
+      detail: `${eye ? 'Naked eye' : 'Binoculars'} · ${showersDir(bt.az)}, ${Math.round(bt.alt)}° up · about magnitude ${it.now.mag.toFixed(1)}`, target: 'comet:' + it.c.id });
+  }
+
   // ----- coming up (next 30 days, after this window) -----
   const later = [];
   const horizon = new Date(now.getTime() + 30 * DAY);
@@ -175,11 +187,24 @@ export function buildPlan(ctx, now = new Date()) {
     const v = assess(l, loc, cfg.launches);
     if (v.level === 'likely' || v.level === 'maybe') later.push({ when: l.net, title: `Launch: ${l.name}`, detail: `${v.label} · ${l.pad.where}`, section: 'launches', hot: v.level === 'likely' });
   }
+  for (const it of interestingComets(ctx, now)) {
+    if (it.peak.mag <= cfg.comets.binocularMag && after(it.peak.t) && it.peak.mag < it.now.mag - 0.5)
+      later.push({ when: it.peak.t, title: `Comet ${it.c.id} at its brightest`, detail: `About magnitude ${it.peak.mag.toFixed(1)} — ${it.peak.mag <= cfg.comets.nakedEyeMag ? 'maybe naked eye' : 'binoculars'} (comets are unpredictable)`, section: 'comets', hot: it.peak.mag <= cfg.comets.nakedEyeMag });
+  }
   later.sort((a, b) => a.when - b.when);
 
   items.sort((a, b) => b.score - a.score || a.when - b.when);
+  // twilight stages for the coming night (descending after sunset, ascending before sunrise)
+  const tw = {};
+  const find = (alt, dir, from) => { try { const r = A().SearchAltitude('Sun', obs, dir, from, 1.2, alt); return r ? r.date : null; } catch (e) { return null; } };
+  const t0 = new Date(night.start.getTime() - 5 * MIN);
+  for (const [k, alt] of [['civil', -6], ['nautical', -12], ['astro', -18]]) {
+    const dn = find(alt, -1, t0); tw[k + 'End'] = dn && dn < night.end ? dn : null;
+    const up = find(alt, +1, tw[k + 'End'] || t0); tw[k + 'Start'] = up && up < night.end ? up : null;
+  }
+
   return {
-    now, loc, sunAlt, night, nights, dark, windowEnd, dayEnd,
+    now, loc, sunAlt, night, nights, dark, windowEnd, dayEnd, twilight: tw,
     sunrise: sunRise ? sunRise.date : null, sunset: sunSet ? sunSet.date : null,
     moon: moonTonight(obs, night), planets, items, later: later.slice(0, 10),
   };

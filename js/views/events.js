@@ -3,6 +3,7 @@
 import * as ev from '../events.js';
 import { eventData } from '../events.js';
 import { loadLaunches, assess } from '../launches.js';
+import { loadComets, interestingComets, verdict, bestTonight } from '../comets.js';
 import * as sky from '../sky.js';
 import { showersView } from './showers.js';
 import { eventsToICS, downloadICS } from '../ics.js';
@@ -172,16 +173,47 @@ function renderLaunches() {
     <p class="foot">Launch times often slip — check again on the day. Data: The Space Devs (Launch Library 2), updated ${Math.round((Date.now() - L.fetchedAt) / 60000)} min ago.</p>`;
 }
 
+// ---------- comets ----------
+
+function renderComets() {
+  const C = ctx.comets;
+  if (!C || C.status === 'idle' || C.status === 'loading') return '<div class="card"><div class="muted">Loading comet orbits…</div></div>';
+  if (C.status === 'error') return `<div class="card warn"><div class="big">Couldn’t load comet data</div><div class="muted">${esc(C.error || '')}</div>
+    <p class="tip">Some science sites don’t allow web apps to read their data. If this keeps happening, the Android-app version of Sky Watch won’t have this limit.</p>
+    <div class="actions"><button class="btn" data-act="recomet">Try again</button></div></div>`;
+  const cfg = ctx.config.comets, obs = sky.makeObserver(ctx.location()), now = new Date();
+  const list = interestingComets(ctx, now);
+  const shown = onlyVisible ? list.filter(x => x.now.mag <= cfg.binocularMag) : list;
+  const cards = shown.map(({ c, now: st, peak }) => {
+    const v = verdict(st.mag, cfg), pv = verdict(peak.mag, cfg);
+    const bt = bestTonight(c, obs, now, sky);
+    const up = bt && bt.alt > 5;
+    const id = 'C' + c.id;
+    const peri = new Date((c.T - 2440587.5) * 86400000);
+    return `<article class="card" data-id="${esc(id)}"><div class="moon-row"><div class="evt-ic">☄</div><div class="grow">
+      <div class="big" style="font-size:17px">${esc(c.name)}</div>
+      <div class="sub">Now about magnitude ${st.mag.toFixed(1)} · ${st.elong < 20 ? 'too close to the Sun to see' : up ? `tonight best ${fmtTime(bt.t)}, ${sky.dirName(bt.az)} ${Math.round(bt.alt)}° up` : 'stays below your horizon at night'}</div>
+      <div class="sub">${peak.t - now > 3 * 86400e3 ? `Brightest around ${fmtDay(peak.t)}${peak.t.getFullYear() !== now.getFullYear() ? ', ' + peak.t.getFullYear() : ''} (mag ${peak.mag.toFixed(1)})` : 'At its brightest about now'} · closest to the Sun ${fmtDay(peri)}${peri.getFullYear() !== now.getFullYear() ? ', ' + peri.getFullYear() : ''}</div>
+      ${badge(v.level, v.label + ' now')} ${pv.label !== v.label ? badge(pv.level, pv.label + ' at best') : ''}
+      ${up ? `<div class="actions"><button class="btn small" data-act="comet-sky" data-c="${esc(c.id)}">Show on sky map</button><button class="btn ghost small" data-act="comet-point" data-c="${esc(c.id)}">Point me at it</button></div>` : ''}
+    </div></div></article>`;
+  }).join('');
+  return `<div class="toolbar"><div class="seg"><button class="${onlyVisible ? '' : 'on'}" data-act="all">All bright comets</button><button class="${onlyVisible ? 'on' : ''}" data-act="vis">Binocular or better</button></div></div>
+    ${cards || '<div class="card"><div class="muted">No comets bright enough to list right now. New ones are found every month — check back.</div></div>'}
+    <p class="foot">Magnitude: lower is brighter (6 ≈ faintest naked-eye star). Comet brightness is hard to predict — they can fizzle or flare. Orbits from ${esc(C.source)}, ${C.list.length.toLocaleString()} comets checked.</p>`;
+}
+
 // ---------- shell ----------
 
 function leaveSub() { if (sub) { sub.unmount(); sub = null; } }
 
 function render() {
   leaveSub();
-  const tabs = [['eclipses', 'Eclipses'], ['moon', 'Moon'], ['planets', 'Planets'], ['showers', 'Showers'], ['launches', 'Launches']];
+  const tabs = [['eclipses', 'Eclipses'], ['moon', 'Moon'], ['planets', 'Planets'], ['showers', 'Showers'], ['comets', 'Comets'], ['launches', 'Launches']];
   root.innerHTML = `<div class="seg wide">${tabs.map(([k, n]) => `<button data-sec="${k}" class="${section === k ? 'on' : ''}">${n}</button>`).join('')}</div><div class="stack" id="ev-body"></div>`;
   body = root.querySelector('#ev-body');
   if (section === 'showers') { sub = showersView; sub.mount(body, ctx); return; }
+  if (section === 'comets') { if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx); body.innerHTML = renderComets(); return; }
   if (section === 'launches') { if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx); body.innerHTML = renderLaunches(); return; }
   const d = eventData(ctx);
   body.innerHTML = section === 'moon' ? renderMoon(d) : section === 'planets' ? renderPlanets(d) : renderEclipses(d);
@@ -196,6 +228,9 @@ function onClick(e) {
     case 'toggle': open.has(card.dataset.id) ? open.delete(card.dataset.id) : open.add(card.dataset.id); render(); break;
     case 'all': onlyVisible = false; render(); break;
     case 'vis': onlyVisible = true; render(); break;
+    case 'recomet': loadComets(ctx, { force: true }); break;
+    case 'comet-sky': ctx.go('sky', { target: 'comet:' + b.dataset.c, mode: 'free' }); break;
+    case 'comet-point': ctx.go('point', { target: 'comet:' + b.dataset.c }); break;
     case 'relaunch': loadLaunches(ctx, { force: true }); break;
     case 'lcal': {
       const l = ctx.launches.list.find(x => 'R' + x.id === card.dataset.id); if (!l) break;
@@ -233,11 +268,12 @@ export const eventsView = {
     root.addEventListener('click', onClick);
     render();
     this._off = ctx.bus.on('launches', () => { if (section === 'launches' && root) render(); });
+    this._offC = ctx.bus.on('comets', () => { if (section === 'comets' && root) render(); });
   },
   tick(c) {
     if (sub && sub.tick) sub.tick(c);
     if (root) root.querySelectorAll('[data-count]').forEach(el => { el.textContent = fmtCountdown(+el.dataset.count - Date.now()); });
   },
-  unmount() { leaveSub(); if (root) root.removeEventListener('click', onClick); if (this._off) this._off(); root = null; },
+  unmount() { leaveSub(); if (root) root.removeEventListener('click', onClick); if (this._off) this._off(); if (this._offC) this._offC(); root = null; },
 };
 void fmtDate; void fmtCountdown;

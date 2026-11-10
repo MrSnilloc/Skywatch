@@ -10,6 +10,8 @@
 import * as sky from './sky.js';
 import { issLive } from './iss.js';
 import { skyData as skyDataNow } from './skydata.js';
+import { cometAt } from './comets.js';
+import { planeLook } from './planes.js';
 import { byCode, radiantNow, gazeSpot, activeShowers } from './showers.js';
 
 const moonProvider = {
@@ -101,7 +103,32 @@ const starProvider = {
   },
 };
 
-const providers = [issProvider, moonProvider, planetProvider, showerProvider, satProvider, starProvider];
+// Comets ("comet:C/2025 X1")
+const cometProvider = {
+  list: () => [],
+  resolve(id, ctx, date) {
+    if (!id.startsWith('comet:') || !ctx.comets) return null;
+    const c = ctx.comets.list.find(x => x.id === id.slice(6));
+    if (!c) return { id, label: id.slice(6), az: 0, alt: 0, unavailable: true, note: 'Comet data not loaded' };
+    const st = cometAt(c, date);
+    const p = sky.fixedPosition(st.ra, st.dec, date, sky.makeObserver(ctx.location()));
+    return { id, label: 'Comet ' + c.id, az: p.az, alt: p.alt, note: `about magnitude ${st.mag.toFixed(1)}` };
+  },
+};
+
+// Live planes ("plane:a1b2c3")
+const planeProvider = {
+  list: () => [],
+  resolve(id, ctx) {
+    if (!id.startsWith('plane:')) return null;
+    const p = ctx.planes && ctx.planes.list.find(x => x.id === id.slice(6));
+    if (!p) return { id, label: 'Plane', az: 0, alt: 0, unavailable: true, note: 'Plane no longer in range' };
+    const lk = planeLook(p, ctx.location());
+    return { id, label: p.call, az: lk.az, alt: lk.el, note: `${Math.round(lk.altFt).toLocaleString()} ft · ${Math.round(lk.rangeKm * 0.621)} mi away` };
+  },
+};
+
+const providers = [planeProvider, issProvider, moonProvider, planetProvider, showerProvider, satProvider, starProvider, cometProvider];
 
 export function listTargets(ctx) {
   return providers.flatMap(p => p.list(ctx));

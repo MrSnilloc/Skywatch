@@ -241,3 +241,39 @@ html.night .sp-time { color: var(--text); }
 #sp-speed button { min-width: 0; padding: 9px 10px; }
 #nav button { font-size: 10.5px; }
 .sp-zoom { position: absolute; right: 10px; top: 76px; }
+
+/* ---- expanded timeline ---- */
+.tl-top { display: flex; justify-content: space-between; align-items: baseline; }
+.sheet-card.tall { max-height: 94vh; }
+.tl-big { position: relative; }
+.tl-big .tl-row { width: 100%; margin: 0; padding: 4px 0; border-radius: 8px; }
+.tl-big .tl-row.sel { background: var(--panel2); }
+.tl-big .tl-row.dimmed { opacity: .35; }
+.tl-big .tl-l { width: 62px; font-size: 12px; text-align: left; }
+.tl-big .tl-track { height: 18px; border-radius: 5px; }
+.tl-big .tl-bar { border-radius: 5px; font-style: normal; }
+.tl-big .tl-bar.cl { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.tl-big .tl-bar.cl b { font-size: 9px; color: #06080d; font-weight: 700; opacity: .9; }
+.tl-big .tl-axis { height: 16px; }
+.tl-bar.ln { background: var(--bad); } .tl-bar.ev { background: var(--warn); }
+.tl-dot { position: absolute; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px #0008; }
+.tl-now { position: absolute; top: 0; bottom: 18px; width: 2px; background: var(--good); z-index: 2; box-shadow: 0 0 6px var(--good); pointer-events: none; }
+.mo-list { padding: 4px 14px; }
+.mo { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.mo:last-child { border-bottom: 0; }
+.mo-t { width: 66px; flex: none; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 14px; }
+.mo-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; }
+.mo .grow { flex: 1; min-width: 0; } .mo b { font-weight: 650; display: block; }
+.mo-c { color: color-mix(in srgb, var(--dim) 80%, transparent); }
+.linkbtn { color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 12px; }
+html.night .tl-dot { background: var(--text); }
+.seg.wide { overflow-x: auto; scrollbar-width: none; } .seg.wide::-webkit-scrollbar { display: none; } .seg.wide button { flex: 1 0 auto; padding: 7px 10px; }
+.tl-bar.cm { background: #7fe3d0; }
+.sp-ecl { position: absolute; right: 10px; top: 76px; }
+
+/* ---- UFO ---- */
+.sky-ufo { position: absolute; left: 50%; transform: translateX(-50%); bottom: 64px; }
+.chip.ufo { padding: 10px 16px; font-size: 14px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.ufo-best { border-color: color-mix(in srgb, var(--accent2) 55%, var(--line)); }
+textarea { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: inherit; resize: vertical; }
+.mo .x { color: var(--dim); font-size: 16px; padding: 2px 4px; align-self: flex-start; }

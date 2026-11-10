@@ -40,6 +40,8 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/skymath.js`, `js/skydata.js`, `data/sky.json` | Sky-map maths, star catalogue loader, ~5,000 stars + constellations |
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
+| `js/planes.js`, `js/ufo.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
+| `js/comets.js` | Comet orbits, positions and brightness estimates |
 | `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
 | `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (globe, Moon, planets), coastlines, shared canvas colours |
 | `js/events.js` | Eclipses, special Moons, planet events — pure calculations |
@@ -53,6 +55,16 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New thing to aim at** (e.g. a bright star, Tiangong): add a provider to `js/targets.js`. It then appears as a chip on the Point screen.
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
+
+## New in v0.9
+- **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
+- **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.
+- **🛸 What's that light?** on the Sky tab: checks planets, bright stars, satellites, Starlink trains, planes, comets and launches where you're pointing and gives a verdict. Unidentified? Save it to the **UFO log**.
+
+## New in v0.8
+- **Comets** (Events → Comets, Look Up, Sky map, Space → Planets): every known comet's orbit (Minor Planet Center / NASA JPL), estimated brightness now and at its best, where to look tonight.
+- **Space**: Live speed on every view; real-looking Earth globe and Moon (with its dark seas) in the Moon view; tap a satellite to ring it, highlight its orbit and *Follow it*.
+- **Expanded timeline** on Look Up (tap the timeline).
 
 ## New in v0.6
 - **Launches** (Events → Launches, plus Look Up): upcoming rocket launches worldwide, with whether you could see them from your location (Wallops ≈ likely, Florida ≈ maybe) and which way to look.
@@ -70,6 +82,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **Events** — lunar and solar eclipses for your location (with local times and eye-safety notes), Blood/Blue/Super/Harvest/Hunter's Moons, planet oppositions, best-view dates and conjunctions, plus the meteor-shower calendar.
 
 ## Credits
+- Aircraft: adsb.lol, airplanes.live, OpenSky Network (community ADS-B feeds).
 - Launch data: The Space Devs — Launch Library 2.
 - Coastlines: Natural Earth (public domain) via world-atlas (ISC).
 - Cloud forecast: Open-Meteo.com (CC BY 4.0).

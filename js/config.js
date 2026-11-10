@@ -65,6 +65,30 @@ export const CONFIG = {
     maybeKm: 1300,           // closer than this: sometimes visible low on the horizon (e.g. Florida from Virginia)
   },
 
+  comets: {
+    // Orbit elements for every known comet. Minor Planet Center first, NASA/JPL as backup. Cached for a day.
+    urls: [
+      'https://www.minorplanetcenter.net/iau/MPCORB/CometEls.txt',
+      'https://ssd-api.jpl.nasa.gov/sbdb_query.api?fields=full_name,q,e,i,om,w,tp,M1,K1&sb-kind=c&sb-cdata=' + encodeURIComponent('{"AND":["M1|DF"]}'),
+    ],
+    cacheHours: 24,
+    listMag: 12,             // Events lists comets predicted brighter than this (lower = brighter)
+    mapMag: 10,              // Sky map / Space view draw comets brighter than this
+    nakedEyeMag: 6, binocularMag: 9,
+  },
+
+  planes: {
+    // Free live aircraft feeds (ADS-B), tried in order. {lat} {lon} {nm} are filled in.
+    sources: [
+      'https://api.adsb.lol/v2/point/{lat}/{lon}/{nm}',
+      'https://api.airplanes.live/v2/point/{lat}/{lon}/{nm}',
+      'opensky',
+    ],
+    radiusNm: 60,            // look this far around you (nautical miles, ~110 km)
+    refreshSec: 10,
+    minEl: 1,                // only draw planes at least this far above your horizon
+  },
+
   sky: {
     // Naked-eye planets are shown by default; the rest sit behind a "telescope" fold.
     planets: ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'],
