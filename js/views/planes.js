@@ -85,16 +85,20 @@ const worldPx = (lat, lon, z) => {
   const s = 256 * Math.pow(2, z), sin = Math.sin(lat * RAD);
   return [(lon + 180) / 360 * s, (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * s];
 };
-function tile(z, x, y) {
+let useFallback = false, tileErrors = 0;
+function tile(layer, z, x, y) {
   const n = Math.pow(2, z); x = ((x % n) + n) % n;
   if (y < 0 || y >= n) return null;
-  const key = `${z}/${x}/${y}`;
+  const tpl = useFallback ? (layer === 0 ? ctx.config.planes.mapFallback : null) : ctx.config.planes.mapLayers[layer];
+  if (!tpl) return null;
+  const key = `${useFallback ? 'f' : layer}/${z}/${x}/${y}`;
   let t = tiles.get(key);
   if (!t) {
-    t = new Image(); t.crossOrigin = 'anonymous'; t.decoding = 'async';
-    t.src = ctx.config.planes.mapTiles.replace('{s}', 'abcd'[(x + y) % 4]).replace('{z}', z).replace('{x}', x).replace('{y}', y).replace('{r}', dpr > 1 ? '@2x' : '');
+    t = new Image(); t.decoding = 'async';
+    t.onerror = () => { if (!useFallback && layer === 0 && ++tileErrors > 4) { useFallback = true; tiles.clear(); const a = host && host.querySelector('.map-attr'); if (a) a.textContent = ctx.config.planes.mapFallbackAttribution; } };
+    t.src = tpl.replace('{z}', z).replace('{x}', x).replace('{y}', y);
     tiles.set(key, t);
-    if (tiles.size > 300) tiles.delete(tiles.keys().next().value);
+    if (tiles.size > 400) tiles.delete(tiles.keys().next().value);
   }
   return t;
 }
@@ -113,13 +117,15 @@ function drawMap() {
   g.clearRect(0, 0, W, H);
   g.fillStyle = col('#0b0d12'); g.fillRect(0, 0, W, H);
   g.save(); g.translate(W / 2, H / 2); g.rotate(rot);
-  if (isNight()) g.filter = 'sepia(1) saturate(4) hue-rotate(-40deg) brightness(.8)';
+  // OpenStreetMap backup is a light map: flip it dark. Red night mode tints everything red.
+  const base = useFallback ? 'invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6)' : '';
+  g.filter = (base + (isNight() ? ' sepia(1) saturate(4) hue-rotate(-40deg) brightness(.8)' : '')).trim() || 'none';
   const half = Math.hypot(W, H) / 2 + 256, tsz = 256 * sc;
   const cwi = [cw[0] / sc, cw[1] / sc];                      // centre in integer-zoom pixels
   const x0 = Math.floor((cwi[0] - half / sc) / 256), x1 = Math.floor((cwi[0] + half / sc) / 256);
   const y0 = Math.floor((cwi[1] - half / sc) / 256), y1 = Math.floor((cwi[1] + half / sc) / 256);
-  for (let tx = x0; tx <= x1; tx++) for (let ty = y0; ty <= y1; ty++) {
-    const im = tile(zi, tx, ty);
+  for (let layer = 0; layer < 2; layer++) for (let tx = x0; tx <= x1; tx++) for (let ty = y0; ty <= y1; ty++) {
+    const im = tile(layer, zi, tx, ty);
     if (im && im.complete && im.naturalWidth) g.drawImage(im, tx * tsz - cw[0], ty * tsz - cw[1], tsz + 0.5, tsz + 0.5);
   }
   g.filter = 'none';
@@ -239,7 +245,7 @@ function bind() {
   host.onclick = (e) => {
     const m = e.target.closest('[data-pm]'); if (m) { V.mode = m.dataset.pm; rerender(); return; }
     const r = e.target.closest('[data-range]'); if (r) { V.rangeMi = +r.dataset.range; rerender(); return; }
-    const z = e.target.closest('[data-mz]'); if (z) { V.zoom = Math.max(5, Math.min(13, V.zoom + +z.dataset.mz)); return; }
+    const z = e.target.closest('[data-mz]'); if (z) { V.zoom = Math.max(5, Math.min(15, V.zoom + +z.dataset.mz)); return; }
     const a = e.target.closest('[data-a]');
     if (a) {
       const act = a.dataset.a;
@@ -258,7 +264,7 @@ function bind() {
     const p = pointers.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (V.mode !== 'map') return;
-    if (pointers.size === 2) { const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (lastDist) V.zoom = Math.max(5, Math.min(13, V.zoom + Math.log2(d / lastDist))); lastDist = d; if (start) start.moved = true; return; }
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (lastDist) V.zoom = Math.max(5, Math.min(15, V.zoom + Math.log2(d / lastDist))); lastDist = d; if (start) start.moved = true; return; }
     if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
       start.moved = true;
       if (V.follow || !V.center) { V.center = mapCenterNow(); V.follow = null; }
@@ -278,7 +284,7 @@ function bind() {
     pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null;
   });
   cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; });
-  cv.addEventListener('wheel', (e) => { if (V.mode !== 'map') return; e.preventDefault(); V.zoom = Math.max(5, Math.min(13, V.zoom + (e.deltaY > 0 ? -0.25 : 0.25))); }, { passive: false });
+  cv.addEventListener('wheel', (e) => { if (V.mode !== 'map') return; e.preventDefault(); V.zoom = Math.max(5, Math.min(15, V.zoom + (e.deltaY > 0 ? -0.25 : 0.25))); }, { passive: false });
 }
 const mapCenterNow = () => mapCenter();
 

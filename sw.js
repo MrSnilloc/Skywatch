@@ -2,7 +2,7 @@
 // Orbit data is NOT cached here (the app saves its own copy), and other websites are never touched.
 // When you change any app file, bump CACHE so phones pick up the new version.
 
-const CACHE = 'skywatch-v13';
+const CACHE = 'skywatch-v16';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'lib/astronomy.browser.min.js', 'lib/satellite.min.js', 'lib/geomagnetism.min.js',

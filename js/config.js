@@ -89,8 +89,14 @@ export const CONFIG = {
     radiusNm: 60,            // look this far around you (nautical miles, ~110 km)
     refreshSec: 10,
     minEl: 1,                // only draw planes at least this far above your horizon
-    mapTiles: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',   // dark street map (© OpenStreetMap, © CARTO)
-    mapAttribution: '© OpenStreetMap contributors · © CARTO',
+    // Dark map, no key needed: Esri "Dark Gray Canvas" (base + labels). If it fails, OpenStreetMap, darkened.
+    mapLayers: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    mapAttribution: 'Esri, HERE, Garmin, © OpenStreetMap contributors',
+    mapFallback: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    mapFallbackAttribution: '© OpenStreetMap contributors',
     overheadKm: 4,           // "passing overhead" means within this distance
     overheadSec: 300,        // ...within the next 5 minutes
   },

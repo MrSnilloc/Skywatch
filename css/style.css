@@ -301,8 +301,9 @@ html.night .cam-panel { background: #180404e6; }
 .pv-wrap { position: relative; margin: 8px -6px 0; border-radius: 14px; overflow: hidden; }
 .pv-wrap canvas { width: 100%; display: block; touch-action: none; }
 .pv-wrap.radar canvas { aspect-ratio: 1; }
-.pv-wrap.map canvas { height: 430px; }
-.map-ctl { position: absolute; left: 8px; bottom: 22px; display: flex; gap: 6px; flex-wrap: wrap; }
+.pv-wrap.map canvas { height: min(430px, calc(100dvh - 330px)); min-height: 260px; }
+.pv-wrap.radar canvas { touch-action: pan-y; }
+.map-ctl { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .map-ctl .chip { padding: 7px 11px; font-size: 13px; }
 .map-ctl .chip.on { color: var(--good); }
 .map-attr { position: absolute; right: 6px; bottom: 3px; font-size: 9px; color: #8a96aa; text-shadow: 0 1px 2px #000; }
@@ -325,3 +326,7 @@ body.cam-on #fab, body.sheet-open #fab { display: none; }
 body[data-view="space"] #fab { bottom: calc(var(--safe-b) + 140px); }
 body[data-view="point"] #fab, body[data-view="sky"] #fab, body.no-fab #fab, body.planes-on #fab { display: none; }
 #view:not(.edge) { padding-bottom: 84px; }
+#fab { touch-action: none; user-select: none; -webkit-user-select: none; }
+#fab.placed { bottom: auto !important; right: auto !important; }
+#fab.dragging { transform: scale(1.08); box-shadow: 0 10px 30px #000c, 0 0 0 2px var(--good); transition: none; }
+.sp-center { position: absolute; left: 10px; top: 76px; }

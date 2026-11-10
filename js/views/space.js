@@ -29,7 +29,7 @@ const PLANETS = [
 const FEATURED = { iss: '#5cc8ff', css: '#ffb454', hst: '#c49bff' };
 
 // state kept between visits
-const S = { scene: 'earth', speedIdx: { earth: 0, moon: 1, solar: 2 }, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false };
+const S = { scene: 'earth', speedIdx: { earth: 0, moon: 1, solar: 2 }, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] } };
 
 let ctx, root, cv, g, W = 1, H = 1, dpr = 1, raf = 0, mounted = false, last = 0;
 let land = null, sats = [], hits = [], stars = [], shade = null, shadeG = null;
@@ -355,7 +355,7 @@ function drawMoonBall(x, y, R, cam, sun, toEarth, pole, moonKm) {
 
 // ---------- Moon scene ----------
 function drawMoonScene(date) {
-  const cx = W / 2, cy = H / 2, k = Math.min(W, H) * 0.42 * S.zoom.moon / 406000;
+  const cx = W / 2 + S.pan.moon[0], cy = H / 2 + S.pan.moon[1], k = Math.min(W, H) * 0.42 * S.zoom.moon / 406000;
   if (!moonPath || Math.abs(moonPath.at - date) > 6 * 3600e3) {
     const pts = [];
     for (let i = 0; i <= 160; i++) { const t = new Date(date.getTime() + (i / 160 - 0.5) * 27.32 * 86400e3); const m = A().GeoMoon(t); const e = toEcl(m); pts.push([e[0] * AU, e[1] * AU]); }
@@ -415,7 +415,7 @@ function solarScale() {
 }
 
 function drawSolar(date) {
-  const cx = W / 2, cy = H / 2, sc = solarScale();
+  const cx = W / 2 + S.pan.solar[0], cy = H / 2 + S.pan.solar[1], sc = solarScale();
   if (!orbitCache) {
     orbitCache = PLANETS.map(([n, per]) => {
       const pts = [];
@@ -515,7 +515,9 @@ function controls() {
   z.classList.toggle('hidden', S.scene !== 'solar');
   z.textContent = S.zoom.solar > 2 ? 'All planets' : 'Inner planets';
   root.querySelector('.sp-ecl').classList.toggle('hidden', S.scene === 'solar');
-  root.querySelector('#sp-hint').textContent = S.scene === 'earth' ? `${sats.length ? sats.length + ' satellites · ' : ''}drag to spin · pinch to zoom · tap to identify` : S.scene === 'moon' ? 'View from above · sizes enlarged' : 'View from above · distances squeezed to fit';
+  const pn = S.pan[S.scene];
+  root.querySelector('.sp-center').classList.toggle('hidden', !pn || Math.hypot(pn[0], pn[1]) < 20);
+  root.querySelector('#sp-hint').textContent = S.scene === 'earth' ? `${sats.length ? sats.length + ' satellites · ' : ''}drag to spin · pinch to zoom · tap to identify` : S.scene === 'moon' ? 'View from above · drag to move · pinch to zoom' : 'View from above · drag to move · pinch to zoom';
 }
 
 function showInfo() {
@@ -563,10 +565,17 @@ function onClick(e) {
   else if (b.dataset.speed) { S.speedIdx[S.scene] = +b.dataset.speed; if (speed() === 1) S.simMs = Date.now(); }
   else if (b.dataset.a === 'now') { S.simMs = Date.now(); }
   else if (b.dataset.a === 'eclipse') { jumpToEclipse(); }
-  else if (b.dataset.a === 'inner') { S.zoom.solar = S.zoom.solar > 2 ? 1 : 3.4; }
+  else if (b.dataset.a === 'inner') { S.zoom.solar = S.zoom.solar > 2 ? 1 : 3.4; S.pan.solar = [0, 0]; }
+  else if (b.dataset.a === 'recenter') { if (S.pan[S.scene]) S.pan[S.scene] = [0, 0]; }
   else if (b.dataset.a === 'close') { S.sel = null; showInfo(); }
   else if (b.dataset.a === 'follow') { S.follow = !S.follow; showInfo(); }
   controls();
+}
+
+function setZoom(z) {
+  const max = S.scene === 'solar' ? 12 : 6, nz = Math.max(0.5, Math.min(max, z)), k = nz / S.zoom[S.scene];
+  if (S.pan[S.scene]) S.pan[S.scene] = S.pan[S.scene].map(v => v * k);   // zoom around the middle of the screen
+  S.zoom[S.scene] = nz;
 }
 
 function bindPointer() {
@@ -581,11 +590,12 @@ function bindPointer() {
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (lastDist) S.zoom[S.scene] = Math.max(0.5, Math.min(S.scene === 'solar' ? 12 : 6, S.zoom[S.scene] * d / lastDist));
+      if (lastDist) setZoom(S.zoom[S.scene] * d / lastDist);
       lastDist = d; if (start) start.moved = true;
     } else if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
       start.moved = true;
       if (S.scene === 'earth') { S.follow = false; S.yaw -= dx * 0.006; S.pitch = Math.max(-1.45, Math.min(1.45, S.pitch + dy * 0.006)); }
+      else { const p = S.pan[S.scene]; p[0] += dx; p[1] += dy; controls(); }
     }
   });
   cv.addEventListener('pointerup', (e) => {
@@ -595,7 +605,7 @@ function bindPointer() {
     pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null;
   });
   cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; });
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom[S.scene] = Math.max(0.5, Math.min(S.scene === 'solar' ? 12 : 6, S.zoom[S.scene] * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: false });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(S.zoom[S.scene] * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
 }
 
 export const spaceView = {
@@ -608,6 +618,7 @@ export const spaceView = {
       <div class="sky-top"><div class="seg" id="sp-scenes"></div><div id="sp-time" class="sp-time"></div></div>
       <button class="chip sp-zoom hidden" data-a="inner">Inner planets</button>
       <button class="chip sp-ecl hidden" data-a="eclipse">Next eclipse ›</button>
+      <button class="chip sp-center hidden" data-a="recenter" aria-label="Re-centre">◎ Centre</button>
       <div id="sp-hint" class="sky-hud"></div>
       <div id="sp-info" class="sky-info hidden"></div>
       <div class="sky-time" id="sp-speed"></div>

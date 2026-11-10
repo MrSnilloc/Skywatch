@@ -39,8 +39,40 @@ function applyFab() { document.body.classList.toggle('no-fab', !store.get('showF
 
 function buildFab() {
   applyFab();
-  // One tap from anywhere: open the camera and ask "What's this?"
-  document.getElementById('fab').onclick = () => go('sky', { cam: true });
+  const fab = document.getElementById('fab');
+  // Drag it anywhere (position is remembered); a plain tap opens the camera and asks "What's this?"
+  const place = (fx, fy) => {
+    const w = fab.offsetWidth, h = fab.offsetHeight, m = 6;
+    const x = Math.max(m, Math.min(innerWidth - w - m, fx * innerWidth - w / 2));
+    const y = Math.max(m, Math.min(innerHeight - h - m, fy * innerHeight - h / 2));
+    fab.style.left = x + 'px'; fab.style.top = y + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto';
+    fab.classList.add('placed');
+  };
+  const saved = store.getCache('fabPos');
+  if (saved) requestAnimationFrame(() => place(saved.x, saved.y));
+  addEventListener('resize', () => { const p = store.getCache('fabPos'); if (p) place(p.x, p.y); });
+  let drag = null;
+  fab.addEventListener('pointerdown', (e) => {
+    const r = fab.getBoundingClientRect();
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: e.clientX - r.left - r.width / 2, oy: e.clientY - r.top - r.height / 2, moved: false };
+    fab.setPointerCapture(e.pointerId);
+  });
+  fab.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
+    drag.moved = true; fab.classList.add('dragging');
+    place((e.clientX - drag.ox) / innerWidth, (e.clientY - drag.oy) / innerHeight);
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const moved = drag.moved; drag = null; fab.classList.remove('dragging');
+    if (moved) {
+      const r = fab.getBoundingClientRect();
+      store.setCache('fabPos', { x: (r.left + r.width / 2) / innerWidth, y: (r.top + r.height / 2) / innerHeight });
+    } else if (e.type === 'pointerup') go('sky', { cam: true });
+  };
+  fab.addEventListener('pointerup', end);
+  fab.addEventListener('pointercancel', end);
 }
 
 function buildNav() {
