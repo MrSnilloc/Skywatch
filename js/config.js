@@ -57,6 +57,14 @@ export const CONFIG = {
     starlinkFadeDays: 14,    // after this the train spreads out and dims (still listed, marked "fading")        // sky map marks satellites above this elevation
   },
 
+  launches: {
+    // Launch Library 2 (The Space Devs) — free; limited to ~15 requests/hour, so results are cached.
+    url: 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=30&mode=normal',
+    cacheMin: 60,
+    likelyKm: 650,           // pad closer than this: a night/twilight launch is usually easy to see
+    maybeKm: 1300,           // closer than this: sometimes visible low on the horizon (e.g. Florida from Virginia)
+  },
+
   sky: {
     // Naked-eye planets are shown by default; the rest sit behind a "telescope" fold.
     planets: ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'],

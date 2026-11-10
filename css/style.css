@@ -231,3 +231,13 @@ html.night .ecl-icon svg circle:first-child { fill: var(--accent); }
 .tl-bar.mn { background: var(--moon); } .tl-bar.ps { background: var(--accent); } .tl-bar.sh { background: var(--good); }
 .tl-axis { position: relative; flex: 1; height: 14px; font-size: 10px; color: var(--dim); }
 .tl-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+
+.seg.wide button { padding: 7px 2px; font-size: 12.5px; }
+
+/* ---- Space ---- */
+.sp-time { font-size: 12px; color: #cfe0ff; text-shadow: 0 1px 3px #000; font-variant-numeric: tabular-nums; text-align: right; }
+html.night .sp-time { color: var(--text); }
+#sp-speed button.on { color: var(--text); font-weight: 650; background: var(--panel2); }
+#sp-speed button { min-width: 0; padding: 9px 10px; }
+#nav button { font-size: 10.5px; }
+.sp-zoom { position: absolute; right: 10px; top: 76px; }

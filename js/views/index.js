@@ -9,6 +9,7 @@ import { tonightView } from './tonight.js';
 import { issView } from './iss.js';
 import { skyView } from './skymap.js';
 import { eventsView } from './events.js';
+import { spaceView } from './space.js';
 import { pointView } from './point.js';
 
-export const views = [tonightView, skyView, issView, eventsView, pointView];
+export const views = [tonightView, skyView, spaceView, issView, eventsView, pointView];

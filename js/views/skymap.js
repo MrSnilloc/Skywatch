@@ -12,6 +12,7 @@ import { store } from '../store.js';
 import { icons, esc, toast } from '../ui.js';
 import { loadGroup, overheadNow } from '../satellites.js';
 import { fmtTime, fmtDayInline } from '../time.js';
+import { col, mix } from '../colors.js';
 
 const A = () => globalThis.Astronomy;
 const RAD = Math.PI / 180, DEG = 180 / Math.PI;
@@ -33,23 +34,6 @@ let ctx, root, cv, g, W = 0, H = 0, dpr = 1, raf = 0, dirty = true, orient = nul
 let nightWas = false, model = null, modelSec = -1, hits = [], starScr = null, lastView = null, wakeLock = null, ready = false, noData = '';
 const pointers = new Map();
 let gc = null, gg = null;
-const colCache = new Map();
-
-// ---------- colour (red night mode keeps the screen dark-adapted) ----------
-function col(hex) {
-  if (!document.documentElement.classList.contains('night')) return hex;
-  let c = colCache.get(hex);
-  if (c) return c;
-  const n = parseInt(hex.slice(1, 7), 16);
-  const L = Math.min(255, Math.round((0.3 * (n >> 16) + 0.55 * ((n >> 8) & 255) + 0.15 * (n & 255)) * 1.25 + 10));
-  c = `rgb(${L},${Math.round(L * 0.12)},${Math.round(L * 0.08)})`;
-  colCache.set(hex, c); return c;
-}
-const mix = (a, b, t) => {
-  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
-  const f = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
-  return `#${[16, 8, 0].map(s => f(s).toString(16).padStart(2, '0')).join('')}`;
-};
 
 // ---------- model: positions of everything that moves ----------
 function nowDate() { return new Date(Date.now() + S.offsetMs); }

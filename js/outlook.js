@@ -6,6 +6,7 @@ import * as showers from './showers.js';
 import { visiblePasses } from './issService.js';
 import { eventData } from './events.js';
 import { moonRating } from './showers.js';
+import { assess } from './launches.js';
 
 const A = () => globalThis.Astronomy;
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -150,6 +151,16 @@ export function buildPlan(ctx, now = new Date()) {
     if (pe.date >= dayStart && pe.date <= dayStop) items.push({ kind: 'event', when: pe.date, title: pe.title, score: 58, detail: pe.detail, go: 'events', section: 'planets', noTime: true });
   }
 
+  // ----- rocket launches you might see -----
+  const launches = (ctx.launches && ctx.launches.status === 'ready') ? ctx.launches.list : [];
+  for (const l of launches) {
+    if (l.net < now - HOUR || l.net > windowEnd) continue;
+    const v = assess(l, loc, cfg.launches);
+    if (v.level !== 'likely' && v.level !== 'maybe') continue;
+    items.push({ kind: 'launch', when: l.net, title: `Launch: ${l.name}`, score: v.level === 'likely' ? 78 : 46,
+      detail: `${v.label} · look ${v.dir} · ${l.pad.where}`, go: 'events', section: 'launches' });
+  }
+
   // ----- coming up (next 30 days, after this window) -----
   const later = [];
   const horizon = new Date(now.getTime() + 30 * DAY);
@@ -159,6 +170,11 @@ export function buildPlan(ctx, now = new Date()) {
   for (const m of d.moons) if (m.flags.some(f => ['super', 'blue', 'blood', 'harvest', 'hunter'].includes(f)) && after(m.date)) later.push({ when: m.date, title: m.name, detail: m.flags.filter(f => f !== 'micro').map(f => ({ super: 'Supermoon', blue: 'Blue Moon', blood: 'Blood Moon', harvest: 'Harvest Moon', hunter: 'Hunter’s Moon', partialEclipse: 'Partial eclipse', penumbral: '' }[f])).filter(Boolean).join(' · '), section: 'moon', hot: m.flags.includes('blood') });
   for (const pe of d.planets) if (pe.type === 'planet' && pe.naked && after(pe.date)) later.push({ when: pe.date, title: pe.title, detail: pe.sub === 'opposition' ? 'Brightest and closest of the year' : pe.sub === 'elongation' ? 'Best view this round' : 'A close pairing in the sky', section: 'planets' });
   for (const c of showers.calendar(now, obs)) if (c.sh.zhr >= 15 && after(c.st.next.peakAt)) later.push({ when: c.st.next.peakAt, title: `${c.sh.name} peak`, detail: `Up to ${c.sh.zhr}/hr · ${c.moonAtPeak.label} at peak`, section: 'showers' });
+  for (const l of launches) {
+    if (!after(l.net)) continue;
+    const v = assess(l, loc, cfg.launches);
+    if (v.level === 'likely' || v.level === 'maybe') later.push({ when: l.net, title: `Launch: ${l.name}`, detail: `${v.label} · ${l.pad.where}`, section: 'launches', hot: v.level === 'likely' });
+  }
   later.sort((a, b) => a.when - b.when);
 
   items.sort((a, b) => b.score - a.score || a.when - b.when);

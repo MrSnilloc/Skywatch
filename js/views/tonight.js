@@ -5,6 +5,7 @@ import * as sky from '../sky.js';
 import { buildPlan } from '../outlook.js';
 import { fetchClouds, avgCloud, cloudVerdict } from '../weather.js';
 import { loadSat, loadStarlink, starlinkState } from '../satellites.js';
+import { loadLaunches } from '../launches.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
 
@@ -68,7 +69,7 @@ function timelineHTML(p) {
 const fill = (it) => it.detail.replace('%T', fmtTime(it.when)).replace('%P', fmtTime(it.peak || it.when));
 
 function cardHTML(it) {
-  const ic = it.kind === 'pass' ? icons.iss : it.kind === 'shower' ? icons.showers : icons.events;
+  const ic = it.kind === 'launch' ? icons.rocket : it.kind === 'pass' ? icons.iss : it.kind === 'shower' ? icons.showers : icons.events;
   const attr = it.sat ? `data-sat="${it.sat}"` : it.go ? `data-go="${it.go}" ${it.section ? `data-sec="${it.section}"` : ''}` : '';
   const timeTxt = it.noTime ? fmtDay(it.when) : `${it.day ? 'Daytime · ' : ''}${fmtDay(it.when)} ${fmtTime(it.when)}${it.until && it.until - it.when > 120e3 ? ' – ' + fmtTime(it.until) : ''}`;
   return `<button class="card tap lu-card ${it.score >= 80 ? 'hot' : ''}" ${attr}>
@@ -134,9 +135,11 @@ export const tonightView = {
       if (e && e.status === 'idle') satTimers.push(setTimeout(() => loadSat(ctx, f.id), 1500 + i * 2500));
     });
     if (starlinkState(ctx).status === 'idle') satTimers.push(setTimeout(() => loadStarlink(ctx), 7000));
+    if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx);
+    this._offL = ctx.bus.on('launches', () => render());
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
   tick() { if (root && Date.now() - planAt > 60000) render(); },
-  unmount() { if (this._off) this._off(); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
+  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
 void sky;

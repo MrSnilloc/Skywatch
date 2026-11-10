@@ -2,6 +2,7 @@
 
 import * as ev from '../events.js';
 import { eventData } from '../events.js';
+import { loadLaunches, assess } from '../launches.js';
 import * as sky from '../sky.js';
 import { showersView } from './showers.js';
 import { eventsToICS, downloadICS } from '../ics.js';
@@ -136,16 +137,52 @@ function renderPlanets(d) {
     <p class="foot">Opposition = the planet is opposite the Sun: closest, brightest, and up all night.</p>`;
 }
 
+// ---------- launches ----------
+
+function renderLaunches() {
+  const L = ctx.launches;
+  if (!L || L.status === 'idle' || L.status === 'loading') return '<div class="card"><div class="muted">Loading upcoming launches…</div></div>';
+  if (L.status === 'error') return `<div class="card warn"><div class="big">Couldn’t load launches</div><div class="muted">${esc(L.error || '')}</div><div class="actions"><button class="btn" data-act="relaunch">Try again</button></div></div>`;
+  const loc = ctx.location(), cfg = ctx.config.launches;
+  let list = L.list.map(l => ({ l, v: assess(l, loc, cfg) }));
+  if (onlyVisible) list = list.filter(x => x.v.level === 'likely' || x.v.level === 'maybe');
+  const cls = { likely: 'good', maybe: 'ok', day: 'dim', no: 'dim' };
+  const cards = list.map(({ l, v }) => {
+    const id = 'R' + l.id, isOpen = open.has(id);
+    const firm = /^(Go|Success)/i.test(l.status);
+    return `<article class="card pass ${v.level === 'no' ? 'faded' : ''}" data-id="${id}">
+      <button class="pass-head" data-act="toggle">
+        <div class="when"><div class="day">${fmtDay(l.net)}</div><div class="time">${fmtTime(l.net)}</div><div class="count" data-count="${l.net.getTime()}">${fmtCountdown(l.net - Date.now())}</div></div>
+        <div class="meta"><div class="dirs">${esc(l.name)}</div>
+          <div class="sub">${esc([l.provider, l.pad.where].filter(Boolean).join(' · '))}</div>
+          ${badge(cls[v.level], v.label)} ${badge(firm ? 'good' : 'dim', firm ? 'Go for launch' : (l.statusName || 'Time not final'))}</div>
+      </button>
+      ${isOpen ? `<div class="pass-more">
+        ${v.note ? `<p class="tip" style="margin-top:0">${esc(v.note)}</p>` : ''}
+        <div class="kv"><span class="sub">Rocket</span><span style="flex:1">${esc(l.rocket || '—')}</span></div>
+        <div class="kv"><span class="sub">Pad</span><span style="flex:1">${esc(l.pad.name)}${v.km != null ? ` · ${Math.round(v.km).toLocaleString()} km ${v.dir} of you` : ''}</span></div>
+        ${l.orbit ? `<div class="kv"><span class="sub">Orbit</span><span style="flex:1">${esc(l.orbit)}</span></div>` : ''}
+        ${l.windowStart && l.windowEnd && l.windowEnd - l.windowStart > 60e3 ? `<div class="kv"><span class="sub">Window</span><span style="flex:1">${fmtTime(l.windowStart)} – ${fmtTime(l.windowEnd)}</span></div>` : ''}
+        ${l.mission ? `<p class="tip">${esc(l.mission)}</p>` : ''}
+        <div class="actions"><button class="btn" data-act="lcal">Add to calendar</button></div></div>` : ''}
+    </article>`;
+  }).join('');
+  return `<div class="toolbar"><div class="seg"><button class="${onlyVisible ? '' : 'on'}" data-act="all">All launches</button><button class="${onlyVisible ? 'on' : ''}" data-act="vis">Visible here</button></div></div>
+    ${cards || '<div class="card"><div class="muted">No launches you could see from here in the current list.</div></div>'}
+    <p class="foot">Launch times often slip — check again on the day. Data: The Space Devs (Launch Library 2), updated ${Math.round((Date.now() - L.fetchedAt) / 60000)} min ago.</p>`;
+}
+
 // ---------- shell ----------
 
 function leaveSub() { if (sub) { sub.unmount(); sub = null; } }
 
 function render() {
   leaveSub();
-  const tabs = [['eclipses', 'Eclipses'], ['moon', 'Moon'], ['planets', 'Planets'], ['showers', 'Showers']];
+  const tabs = [['eclipses', 'Eclipses'], ['moon', 'Moon'], ['planets', 'Planets'], ['showers', 'Showers'], ['launches', 'Launches']];
   root.innerHTML = `<div class="seg wide">${tabs.map(([k, n]) => `<button data-sec="${k}" class="${section === k ? 'on' : ''}">${n}</button>`).join('')}</div><div class="stack" id="ev-body"></div>`;
   body = root.querySelector('#ev-body');
   if (section === 'showers') { sub = showersView; sub.mount(body, ctx); return; }
+  if (section === 'launches') { if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx); body.innerHTML = renderLaunches(); return; }
   const d = eventData(ctx);
   body.innerHTML = section === 'moon' ? renderMoon(d) : section === 'planets' ? renderPlanets(d) : renderEclipses(d);
 }
@@ -159,6 +196,13 @@ function onClick(e) {
     case 'toggle': open.has(card.dataset.id) ? open.delete(card.dataset.id) : open.add(card.dataset.id); render(); break;
     case 'all': onlyVisible = false; render(); break;
     case 'vis': onlyVisible = true; render(); break;
+    case 'relaunch': loadLaunches(ctx, { force: true }); break;
+    case 'lcal': {
+      const l = ctx.launches.list.find(x => 'R' + x.id === card.dataset.id); if (!l) break;
+      const v = assess(l, ctx.location(), ctx.config.launches);
+      downloadICS(eventsToICS([{ uid: 'launch-' + l.id, start: l.net, end: new Date(l.net.getTime() + 15 * 60e3), summary: `Launch: ${l.name}`, desc: `${l.provider} from ${l.pad.name}. ${v.label}. ${v.note || ''} Times can change — check before heading out.`, leadMin: 30 }]));
+      toast('Open the file to add it to Calendar'); break;
+    }
     case 'cal': {
       const d = eventData(ctx);
       const e1 = d.eclipses.find(x => (x.type === 'lunar' ? 'L' : 'S') + x.peak.getTime() === card.dataset.id);
@@ -188,9 +232,12 @@ export const eventsView = {
     if (params && params.section) section = params.section;
     root.addEventListener('click', onClick);
     render();
-    this._off = ctx.bus.on('sats', () => {});
+    this._off = ctx.bus.on('launches', () => { if (section === 'launches' && root) render(); });
   },
-  tick(c) { if (sub && sub.tick) sub.tick(c); },
+  tick(c) {
+    if (sub && sub.tick) sub.tick(c);
+    if (root) root.querySelectorAll('[data-count]').forEach(el => { el.textContent = fmtCountdown(+el.dataset.count - Date.now()); });
+  },
   unmount() { leaveSub(); if (root) root.removeEventListener('click', onClick); if (this._off) this._off(); root = null; },
 };
 void fmtDate; void fmtCountdown;

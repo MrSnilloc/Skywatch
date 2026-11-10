@@ -40,6 +40,8 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/skymath.js`, `js/skydata.js`, `data/sky.json` | Sky-map maths, star catalogue loader, ~5,000 stars + constellations |
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
+| `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
+| `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (globe, Moon, planets), coastlines, shared canvas colours |
 | `js/events.js` | Eclipses, special Moons, planet events — pure calculations |
 | `js/targets.js` | Everything the finder can aim at |
 | `js/views/*.js` | The screens (Tonight, Sky, Passes, Events, Point, Settings) |
@@ -51,6 +53,10 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New thing to aim at** (e.g. a bright star, Tiangong): add a provider to `js/targets.js`. It then appears as a chip on the Point screen.
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
+
+## New in v0.6
+- **Launches** (Events → Launches, plus Look Up): upcoming rocket launches worldwide, with whether you could see them from your location (Wallops ≈ likely, Florida ≈ maybe) and which way to look.
+- **Space** tab: animated 3D Earth with day/night, coastlines and real satellite orbits; the Earth–Moon system; the solar system from above. Live or sped up.
 
 ## New in v0.5
 - **Starlink trains** on the Passes tab (and in Look Up / the Sky map): recent launches grouped into trains, with pass times. Trains older than ~2 weeks are marked fading.
@@ -64,6 +70,8 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **Events** — lunar and solar eclipses for your location (with local times and eye-safety notes), Blood/Blue/Super/Harvest/Hunter's Moons, planet oppositions, best-view dates and conjunctions, plus the meteor-shower calendar.
 
 ## Credits
+- Launch data: The Space Devs — Launch Library 2.
+- Coastlines: Natural Earth (public domain) via world-atlas (ISC).
 - Cloud forecast: Open-Meteo.com (CC BY 4.0).
 - Star and constellation data: d3-celestial (BSD-3-Clause), derived from the Hipparcos/Yale Bright Star catalogues.
 Orbit maths: satellite.js (MIT). Sun/Moon/planets/radiants: astronomy-engine (MIT). Magnetic declination: NOAA World Magnetic Model 2025 via geomagnetism (Apache-2.0). ISS orbit data: CelesTrak, with backup sources. ZIP lookup: zippopotam.us. Licences are in `lib/THIRD-PARTY-LICENSES.txt`.

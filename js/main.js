@@ -61,7 +61,7 @@ store.onChange((keys) => {
     setTimeout(() => { recomputeLoaded(ctx); ctx.bus.emit('iss'); }, 400);
   }
   if (keys.some(k => ['hour12', 'minPeakEl', 'showAllPasses'].includes(k)) && current) {
-    const id = current.id; if (id !== 'point' && id !== 'sky') go(id);
+    const id = current.id; if (!['point', 'sky', 'space'].includes(id)) go(id);
   }
 });
 
@@ -78,7 +78,7 @@ setInterval(() => {
 
 // Come back to a fresh picture when the app returns to the foreground.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { if (needsRecompute(ctx)) refreshIss(ctx); if (current && current.id !== 'point' && current.id !== 'sky') go(current.id); }
+  if (document.visibilityState === 'visible') { if (needsRecompute(ctx)) refreshIss(ctx); if (current && !['point', 'sky', 'space'].includes(current.id)) go(current.id); }
 });
 
 // Offline support + installability (needs https).
