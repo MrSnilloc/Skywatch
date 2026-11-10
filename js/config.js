@@ -16,6 +16,8 @@ export const CONFIG = {
     azOffset: 0,             // extra compass trim set by "Calibrate" on the Point screen
     hour12: true,
     nightMode: false,        // red night-vision theme
+    showFab: true,           // floating "What's this?" camera button
+    planeAlerts: true,       // Look Up shows planes about to pass overhead
     minPeakEl: 10,           // hide ISS passes that never climb above this many degrees
     showAllPasses: false,    // also list passes that can't be seen (daylight / ISS in shadow)
   },
@@ -87,6 +89,10 @@ export const CONFIG = {
     radiusNm: 60,            // look this far around you (nautical miles, ~110 km)
     refreshSec: 10,
     minEl: 1,                // only draw planes at least this far above your horizon
+    mapTiles: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',   // dark street map (© OpenStreetMap, © CARTO)
+    mapAttribution: '© OpenStreetMap contributors · © CARTO',
+    overheadKm: 4,           // "passing overhead" means within this distance
+    overheadSec: 300,        // ...within the next 5 minutes
   },
 
   sky: {

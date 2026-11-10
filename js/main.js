@@ -35,7 +35,10 @@ function go(id, params) {
   try { history.replaceState(null, '', '#' + next.id); } catch (e) { /* ignore */ }
 }
 
+function applyFab() { document.body.classList.toggle('no-fab', !store.get('showFab')); }
+
 function buildFab() {
+  applyFab();
   // One tap from anywhere: open the camera and ask "What's this?"
   document.getElementById('fab').onclick = () => go('sky', { cam: true });
 }
@@ -61,6 +64,7 @@ function updateSubtitle() {
 // React to settings changes.
 store.onChange((keys) => {
   if (keys.includes('nightMode')) applyTheme();
+  if (keys.includes('showFab')) applyFab();
   if (keys.some(k => ['lat', 'lon', 'elev', 'locName'].includes(k))) {
     updateSubtitle();
     refreshIss(ctx);                       // same orbit data, new viewing spot

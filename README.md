@@ -60,7 +60,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
 - **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.
 - **🛸 What's this?** — a floating button on every screen — opens the camera with a crosshair (no labels — no spoilers). Tap **What's this?** and Sky Watch works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
-- **✈ Planes** chip on the Passes tab: live radar (25/50/100 mi) and nearest-first list.
+- **✈ Planes** chip on the Passes tab: live dark street **Map** (North-up or Heading-up — turns with your phone; pinch, drag, Follow a plane) and **Radar** (25/50/100 mi, trails, "easy to see" ring, planes heading your way). Colours show altitude. **Look Up** shows a banner when a plane is about to pass overhead (Settings to turn off).
 
 ## New in v0.8
 - **Comets** (Events → Comets, Look Up, Sky map, Space → Planets): every known comet's orbit (Minor Planet Center / NASA JPL), estimated brightness now and at its best, where to look tonight.

@@ -39,6 +39,16 @@ export async function loadPlanes(ctx, { force = false } = {}) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const j = await res.json();
       P.list = src === 'opensky' ? normOpenSky(j) : normADSB(j);
+      // remember where each plane has been (for trails), last ~6 minutes
+      if (!P.trails) P.trails = {};
+      const cut = Date.now() - 6 * 60e3;
+      for (const pl of P.list) {
+        const t = P.trails[pl.id] || (P.trails[pl.id] = []);
+        const last = t[t.length - 1];
+        if (!last || last.lat !== pl.lat || last.lon !== pl.lon) t.push({ lat: pl.lat, lon: pl.lon, t: pl.seen });
+        while (t.length && t[0].t < cut) t.shift();
+      }
+      for (const id of Object.keys(P.trails)) if (!P.trails[id].length || P.trails[id][P.trails[id].length - 1].t < cut) delete P.trails[id];
       P.source = new URL(url).host; P.sourceUrl = src; P.at = Date.now(); P.status = 'ready'; P.error = null; P.busy = false;
       ctx.bus.emit('planes');
       return;
@@ -69,3 +79,28 @@ export function planeLook(p, loc, now = Date.now()) {
 
 export const kmToMi = (km) => km * 0.621371;
 export const ktToMph = (kt) => kt * 1.15078;
+
+/** Colour by altitude: low & slow = warm, cruising = cool. */
+export function altColor(ft) { return ft < 5000 ? '#ff9a4d' : ft < 15000 ? '#ffd27a' : ft < 28000 ? '#9fe0ff' : '#5cc8ff'; }
+
+/**
+ * Will this plane pass (nearly) over you soon? Straight-line guess from its heading and speed.
+ * -> { inSec, distKm (closest), elDeg (how high it'll be then), approaching } or null
+ */
+export function closestApproach(p, loc, now = Date.now()) {
+  const lk = planeLook(p, loc, now);
+  const e = lk.groundKm * Math.sin(lk.az * RAD), n = lk.groundKm * Math.cos(lk.az * RAD);
+  const v = p.gsKt * 0.000514444, ve = v * Math.sin(p.track * RAD), vn = v * Math.cos(p.track * RAD);
+  const vv = ve * ve + vn * vn; if (vv < 1e-9) return null;
+  const t = -(e * ve + n * vn) / vv;
+  const de = e + ve * t, dn = n + vn * t, d = Math.hypot(de, dn);
+  return { inSec: t, distKm: d, elDeg: Math.atan2(p.altFt * FT / 1000, Math.max(0.05, d)) * DEG, approaching: t > 0, now: lk };
+}
+
+/** Planes that will pass within `km` of you in the next `maxSec` seconds, soonest first. */
+export function overheadSoon(ctx, km = 4, maxSec = 300) {
+  const P = ctx.planes; if (!P || !P.list.length) return [];
+  const loc = ctx.location();
+  return P.list.map(p => ({ p, c: closestApproach(p, loc) })).filter(x => x.c && x.c.inSec > -20 && x.c.inSec < maxSec && x.c.distKm < km && x.p.altFt > 500)
+    .sort((a, b) => a.c.inSec - b.c.inSec);
+}

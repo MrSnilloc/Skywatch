@@ -7,6 +7,8 @@ import { fetchClouds, avgCloud, cloudVerdict } from '../weather.js';
 import { loadSat, loadStarlink, starlinkState } from '../satellites.js';
 import { loadLaunches } from '../launches.js';
 import { loadComets } from '../comets.js';
+import { loadPlanes, overheadSoon, kmToMi } from '../planes.js';
+import { store } from '../store.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
 
@@ -178,11 +180,12 @@ function render() {
   plan = buildPlan(ctx, new Date()); planAt = Date.now();
   const p = plan;
   const cards = p.items.filter(i => i.kind !== 'planet').slice(0, 8);
-  root.innerHTML = `${headerHTML(p)}${timelineHTML(p)}
+  root.innerHTML = `<div id="lu-plane"></div>${headerHTML(p)}${timelineHTML(p)}
     <h3 class="sect">Worth looking up for</h3>
     ${cards.length ? cards.map(cardHTML).join('') : '<div class="card"><div class="muted">A quiet one — nothing special tonight. The planets below are still worth a look, and there’s more coming up.</div></div>'}
     ${planetsHTML(p)}${laterHTML(p)}
     <p class="foot">Worked out for ${esc(ctx.location().name)}. Cloud forecast: Open-Meteo.com. Tap anything to explore.</p>`;
+  planeBanner();
 }
 
 async function getClouds() {
@@ -193,7 +196,23 @@ async function getClouds() {
   render();
 }
 
+function planeBanner() {
+  const el = root && root.querySelector('#lu-plane'); if (!el) return;
+  let html = '';
+  if (store.get('planeAlerts')) {
+    const cfg = ctx.config.planes, x = overheadSoon(ctx, cfg.overheadKm, cfg.overheadSec)[0];
+    if (x) {
+      const { p, c } = x, sec = Math.round(c.inSec);
+      const when = sec <= 20 ? 'overhead now' : sec < 90 ? `overhead in ${sec} s` : `overhead in ${Math.round(sec / 60)} min`;
+      html = `<button class="card tap lu-plane" data-go="passes" data-plane-chip="1"><span class="ic">✈</span><span class="grow"><span class="name">${esc(p.call)} passing ${when}</span>
+        <span class="sub">${Math.round(p.altFt).toLocaleString()} ft${p.type ? ' · ' + esc(p.type) : ''} · look ${dirOf(c.now.az)}, ${Math.max(1, Math.round(c.now.el))}° up now · closest ${kmToMi(c.distKm).toFixed(1)} mi</span></span></button>`;
+    }
+  }
+  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+}
+
 function onClick(e) {
+  if (e.target.closest('[data-plane-chip]')) { ctx.go('passes', { sat: 'planes' }); return; }
   if (e.target.closest('[data-act="timeline"]')) { openTimeline(); return; }
   const t = e.target.closest('[data-target],[data-go],[data-sat]');
   if (!t) return;
@@ -220,10 +239,13 @@ export const tonightView = {
     if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx);
     if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
     this._offC = ctx.bus.on('comets', () => render());
+    this._offP = ctx.bus.on('planes', () => planeBanner());
+    const poll = () => { if (store.get('planeAlerts') && document.visibilityState === 'visible') loadPlanes(ctx); };
+    poll(); this._planeTimer = setInterval(poll, 20000);
     this._offL = ctx.bus.on('launches', () => render());
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
-  tick() { if (root && Date.now() - planAt > 60000) render(); },
-  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
+  tick() { if (!root) return; if (Date.now() - planAt > 60000) render(); else planeBanner(); },
+  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
 void sky;

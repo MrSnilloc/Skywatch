@@ -14,6 +14,8 @@ const SECTIONS = [
   { title: 'Display', items: [
     { key: 'nightMode', type: 'toggle', label: 'Red night mode', hint: 'Protects your night vision outdoors' },
     { key: 'hour12', type: 'toggle', label: '12-hour clock' },
+    { key: 'planeAlerts', type: 'toggle', label: 'Tell me when a plane is about to pass overhead', hint: 'Shown at the top of Look Up' },
+    { key: 'showFab', type: 'toggle', label: 'Show the “What’s this?” button', hint: 'The floating camera button for identifying lights' },
   ]},
   { title: 'ISS passes', items: [
     { key: 'minPeakEl', type: 'select', label: 'Only passes that climb above', options: [[10, '10°'], [20, '20°'], [30, '30°'], [45, '45°']] },

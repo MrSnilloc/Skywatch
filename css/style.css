@@ -297,7 +297,19 @@ html.night .cam-panel { background: #180404e6; }
 .sky-wrap.cam .sky-info { bottom: 175px; }
 
 /* ---- planes radar ---- */
-.radar-card canvas { width: 100%; aspect-ratio: 1; display: block; margin-top: 8px; }
+/* planes view */
+.pv-wrap { position: relative; margin: 8px -6px 0; border-radius: 14px; overflow: hidden; }
+.pv-wrap canvas { width: 100%; display: block; touch-action: none; }
+.pv-wrap.radar canvas { aspect-ratio: 1; }
+.pv-wrap.map canvas { height: 430px; }
+.map-ctl { position: absolute; left: 8px; bottom: 22px; display: flex; gap: 6px; flex-wrap: wrap; }
+.map-ctl .chip { padding: 7px 11px; font-size: 13px; }
+.map-ctl .chip.on { color: var(--good); }
+.map-attr { position: absolute; right: 6px; bottom: 3px; font-size: 9px; color: #8a96aa; text-shadow: 0 1px 2px #000; }
+.plane-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.plane-card .sub b { font-weight: 650; }
+.lu-plane { display: flex; gap: 12px; align-items: center; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.lu-plane .ic { font-size: 22px; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 .row.sel { background: var(--panel2); }
 .cam-go { width: 100%; text-align: center; font-size: 17px; padding: 14px; }
@@ -310,6 +322,6 @@ html.night .cam-panel { background: #180404e6; }
 #fab:active { transform: scale(.96); }
 html.night #fab { color: #120000; background: linear-gradient(135deg, #ff6a4d, #ff3d2e); }
 body.cam-on #fab, body.sheet-open #fab { display: none; }
-body[data-view="sky"] #fab, body[data-view="space"] #fab { bottom: calc(var(--safe-b) + 140px); }
-body[data-view="point"] #fab { display: none; }
+body[data-view="space"] #fab { bottom: calc(var(--safe-b) + 140px); }
+body[data-view="point"] #fab, body[data-view="sky"] #fab, body.no-fab #fab, body.planes-on #fab { display: none; }
 #view:not(.edge) { padding-bottom: 84px; }
