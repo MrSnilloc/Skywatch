@@ -59,7 +59,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 ## New in v0.9
 - **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
 - **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.
-- **🛸 What's that light?** on the Sky tab opens the camera with a crosshair (no labels — no spoilers). Tap **What is this?** and Sky Watch works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
+- **🛸 What's this?** — a floating button on every screen — opens the camera with a crosshair (no labels — no spoilers). Tap **What's this?** and Sky Watch works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
 - **✈ Planes** chip on the Passes tab: live radar (25/50/100 mi) and nearest-first list.
 
 ## New in v0.8

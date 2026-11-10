@@ -446,7 +446,7 @@ function frame() {
   updateModel(false);
   const nightNow = document.documentElement.classList.contains('night');
   if (nightNow !== nightWas) { nightWas = nightNow; dirty = true; }
-  if (S.mode === 'live' || dirty) { draw(); dirty = false; }
+  if (S.mode === 'live' || S.camMode || dirty) { draw(); dirty = false; }
 }
 
 // ---------- identify ----------
@@ -620,7 +620,7 @@ function updateCamPanel(fwd) {
 async function enterCam() {
   S.camMode = true; S.mode = 'live'; S.sel = null; showInfo();
   S.camFov = +(store.getCache('camFov') || 66);
-  root.classList.add('cam'); updateButtons(); startLive(); camErr = '';
+  root.classList.add('cam'); document.body.classList.add('cam-on'); updateButtons(); startLive(); camErr = '';
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('not supported here');
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
@@ -638,6 +638,7 @@ function exitCam() {
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null; if (video) video.remove(); video = null;
   if (root) root.classList.remove('cam');
+  document.body.classList.remove('cam-on');
   dirty = true;
 }
 
@@ -677,7 +678,7 @@ function openUfo(photo = null, fwdIn = null) {
     ${list.length > 1 ? `<h3 class="sect">Also nearby</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
     : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
       <div class="sub" style="margin-top:4px">Nothing Sky Watch knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
-  openSheet(`<div class="sheet-head"><h2>${S.camMode ? (best ? 'Identified!' : 'Hmm…') : 'What’s that light?'}</h2><button class="btn ghost small" data-close>Close</button></div>
+  openSheet(`<div class="sheet-head"><h2>${S.camMode ? (best ? 'Identified!' : 'Hmm…') : 'What’s this?'}</h2><button class="btn ghost small" data-close>Close</button></div>
     ${photo ? `<img class="ufo-photo" src="${photo}" alt="">` : ''}
     <p class="sub" style="margin:4px 0 10px">Checked around ${where}. ${S.mode === 'live' ? 'Phone compasses can be off by 5–10°.' : 'Using the centre of the map.'}</p>
     ${body}${planesNote}
@@ -725,7 +726,7 @@ function openLogList() {
   openSheet(`<div class="sheet-head"><h2>UFO log</h2><button class="btn ghost small" data-close>Done</button></div>
     ${log.length ? `<div class="card">${log.map(e => `<div class="mo"><span class="mo-t">${new Date(e.t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}<span class="sub">${fmtTime(new Date(e.t))}</span></span><span class="grow">${e.photo ? `<img class="ufo-thumb" src="${e.photo}" alt="">` : ''}<b>${sky.dirName(e.az)} · ${Math.round(e.alt)}° up</b><span class="sub">${esc([e.move, e.color].filter(Boolean).join(' · '))}</span>${e.notes ? `<span class="sub">${esc(e.notes)}</span>` : ''}${e.nearby && e.nearby.length ? `<span class="sub">Nearby: ${esc(e.nearby.join('; '))}</span>` : ''}</span><button class="x" data-del="${e.id}" aria-label="Delete">✕</button></div>`).join('')}</div>
       <div class="actions" style="margin-top:12px"><button class="btn ghost" data-share="1">Share / copy log</button></div>`
-      : '<div class="card"><div class="muted">No sightings yet. Point at something odd and tap “What’s that light?”.</div></div>'}`,
+      : '<div class="card"><div class="muted">No sightings yet. Point at something odd and tap “What’s this?”.</div></div>'}`,
   (e) => {
     const d = e.target.closest('[data-del]');
     if (d) { removeFromLog(+d.dataset.del); openLogList(); return; }
@@ -836,10 +837,9 @@ export const skyView = {
       </div>
       <div class="cam-ui">
         <div class="cam-top"><span class="chip" id="cam-hint">Put the light in the circle</span><button class="chip" data-a="camclose" aria-label="Close camera">✕</button></div>
-        <div class="cam-panel"><div class="sub" style="margin-bottom:8px">See something odd? Hold it in the circle and ask.</div><button class="btn cam-go" data-a="camcap">🔍 What is this?</button></div>
+        <div class="cam-panel"><div class="sub" style="margin-bottom:8px">See something odd? Hold it in the circle and ask.</div><button class="btn cam-go" data-a="camcap">🔍 What’s this?</button></div>
       </div>
-      <div class="sky-ufo"><button class="chip ufo" data-a="ufo">🛸 What’s that light?</button>
-      </div>
+
       <div id="sky-hud" class="sky-hud"></div>
       <div id="sky-note" class="sky-note hidden"></div>
       <button class="chip stop hidden" data-a="stopguide">Stop guiding</button>
@@ -855,6 +855,7 @@ export const skyView = {
     const hasSensors = 'DeviceOrientationEvent' in window && (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
     if (params && params.mode) S.mode = params.mode; else if (!hasSensors) S.mode = 'free';
     if (params && params.target) { S.target = params.target; }
+    if (params && params.cam) setTimeout(() => { if (mounted) enterCam(); }, 0);
     if (S.mode === 'live') startLive();
     resize(); updateButtons();
     if (S.layers.sats && ctx.sats.group.status === 'idle') loadGroup(ctx);

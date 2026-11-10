@@ -279,9 +279,13 @@ textarea { width: 100%; background: var(--panel); color: var(--text); border: 1p
 .mo .x { color: var(--dim); font-size: 16px; padding: 2px 4px; align-self: flex-start; }
 
 /* ---- camera "What's that?" ---- */
-.sky-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sky-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.sky-wrap canvas { position: relative; z-index: 1; }
+.sky-wrap > div, .sky-wrap > button { z-index: 2; }
 .cam-ui { display: none; }
 .sky-wrap.cam .cam-ui { display: block; }
+.cam-ui { position: absolute; inset: 0; z-index: 3 !important; pointer-events: none; }
+.cam-ui > * { pointer-events: auto; }
 .sky-wrap.cam .sky-top, .sky-wrap.cam .sky-zoom, .sky-wrap.cam .sky-time, .sky-wrap.cam .sky-ufo, .sky-wrap.cam .stop, .sky-wrap.cam #sky-hud { display: none !important; }
 .cam-top { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .cam-top #cam-hint { font-weight: 500; font-size: 12px; flex: 1; }
@@ -297,3 +301,15 @@ html.night .cam-panel { background: #180404e6; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 .row.sel { background: var(--panel2); }
 .cam-go { width: 100%; text-align: center; font-size: 17px; padding: 14px; }
+
+/* ---- floating "What's this?" button (every screen) ---- */
+#fab { position: fixed; z-index: 15; right: max(14px, calc(50% - 266px)); bottom: calc(var(--safe-b) + 84px);
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 13px; border-radius: 999px; font-weight: 700; font-size: 14px;
+  color: #04070d; background: linear-gradient(135deg, var(--good), var(--accent)); box-shadow: 0 6px 22px #0009, 0 0 0 1px #ffffff22 inset; }
+#fab .ic { font-size: 19px; line-height: 1; }
+#fab:active { transform: scale(.96); }
+html.night #fab { color: #120000; background: linear-gradient(135deg, #ff6a4d, #ff3d2e); }
+body.cam-on #fab, body.sheet-open #fab { display: none; }
+body[data-view="sky"] #fab, body[data-view="space"] #fab { bottom: calc(var(--safe-b) + 140px); }
+body[data-view="point"] #fab { display: none; }
+#view:not(.edge) { padding-bottom: 84px; }

@@ -29,9 +29,15 @@ function go(id, params) {
   viewEl.scrollTop = 0;
   viewEl.innerHTML = '';
   current = next;
+  document.body.dataset.view = next.id;
   next.mount(viewEl, ctx, params);
   navEl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.view === next.id));
   try { history.replaceState(null, '', '#' + next.id); } catch (e) { /* ignore */ }
+}
+
+function buildFab() {
+  // One tap from anywhere: open the camera and ask "What's this?"
+  document.getElementById('fab').onclick = () => go('sky', { cam: true });
 }
 
 function buildNav() {
@@ -66,7 +72,7 @@ store.onChange((keys) => {
 });
 
 // Boot
-applyTheme(); buildNav(); updateSubtitle();
+applyTheme(); buildNav(); buildFab(); updateSubtitle();
 const startId = (location.hash || '').replace('#', '');
 go(views.some(v => v.id === startId) ? startId : views[0].id);
 refreshIss(ctx);
