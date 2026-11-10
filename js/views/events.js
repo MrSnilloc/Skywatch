@@ -1,6 +1,7 @@
 // views/events.js — the sky calendar: Eclipses | Moon | Planets | Showers, all worked out for YOUR location.
 
 import * as ev from '../events.js';
+import { eventData } from '../events.js';
 import * as sky from '../sky.js';
 import { showersView } from './showers.js';
 import { eventsToICS, downloadICS } from '../ics.js';
@@ -9,22 +10,6 @@ import { icons, esc, toast, moonSVG } from '../ui.js';
 
 let root, body, ctx, section = 'eclipses', onlyVisible = false, sub = null;
 const open = new Set();
-let cache = null;
-
-/** All event lists for the current location, computed once per location per day. */
-export function eventData(c) {
-  const l = c.location();
-  const key = `${l.lat.toFixed(2)},${l.lon.toFixed(2)},${new Date().toDateString()}`;
-  if (cache && cache.key === key) return cache;
-  const now = new Date();
-  const lunar = ev.lunarEclipses(new Date(now.getTime() - 3 * 3600e3), 14, l);
-  const solar = ev.solarEclipses(new Date(now.getTime() - 3 * 3600e3), 14, l);
-  const moons = ev.fullMoons(new Date(now.getTime() - 3 * 3600e3), 30, lunar);
-  const planets = ev.planetEvents(now, 24, l);
-  cache = { key, lunar, solar, moons, planets, eclipses: [...lunar, ...solar].sort((a, b) => a.peak - b.peak) };
-  return cache;
-}
-
 const badge = (cls, t) => `<span class="badge ${cls}">${t}</span>`;
 const dur = (min) => min >= 60 ? `${Math.floor(min / 60)} h ${Math.round(min % 60)} m` : `${Math.round(min)} min`;
 const dirAlt = (az, alt) => alt > 0 ? `${sky.dirName(az)}, ${Math.round(alt)}° up` : 'below your horizon';

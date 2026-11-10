@@ -210,3 +210,24 @@ html.night .ecl-icon svg circle:first-child { fill: var(--accent); }
 .chip-btn.on { color: var(--text); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .ecl .when { min-width: 88px; } .ecl .time { font-size: 17px !important; } .ecl .pass-more .kv { gap: 8px; }
+
+/* ---- Look Up ---- */
+.lu-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.lu-moon { text-align: center; }
+.nights { display: flex; gap: 8px; margin: 6px 0 10px; }
+.nt { flex: 1; text-align: center; padding: 8px 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+.nt .val { font-size: 18px; } .nt.good .val { color: var(--good); } .nt.ok .val { color: var(--warn); } .nt.bad .val { color: var(--bad); }
+.good { color: var(--good); } .warnc { color: var(--warn); } .bad { color: var(--bad); }
+.lu-card { display: flex; align-items: center; gap: 14px; }
+.lu-card.hot { border-color: color-mix(in srgb, var(--accent2) 60%, var(--line)); box-shadow: 0 0 18px color-mix(in srgb, var(--accent2) 18%, transparent); }
+.lu-card .grow { flex: 1; min-width: 0; } .lu-card .name { display: block; font-weight: 650; }
+.lu-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); color: var(--accent); }
+.tl .eyebrow { margin-bottom: 8px; }
+.tl-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.tl-l { width: 62px; flex: none; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-track { position: relative; flex: 1; height: 12px; border-radius: 6px; background: var(--panel); overflow: hidden; }
+.tl-bar { position: absolute; top: 0; bottom: 0; border-radius: 6px; }
+.tl-bar.cl { background: #9db0c9; border-radius: 0; } .tl-bar.dk { background: color-mix(in srgb, var(--accent2) 55%, transparent); }
+.tl-bar.mn { background: var(--moon); } .tl-bar.ps { background: var(--accent); } .tl-bar.sh { background: var(--good); }
+.tl-axis { position: relative; flex: 1; height: 14px; font-size: 10px; color: var(--dim); }
+.tl-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }

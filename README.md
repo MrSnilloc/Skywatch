@@ -39,6 +39,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/geo.js` | ZIP code → location lookup |
 | `js/skymath.js`, `js/skydata.js`, `data/sky.json` | Sky-map maths, star catalogue loader, ~5,000 stars + constellations |
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
+| `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
 | `js/events.js` | Eclipses, special Moons, planet events — pure calculations |
 | `js/targets.js` | Everything the finder can aim at |
 | `js/views/*.js` | The screens (Tonight, Sky, Passes, Events, Point, Settings) |
@@ -51,12 +52,16 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 
+## New in v0.4
+- **Look Up** replaces Tonight: a plan for today *and* tonight — cloud forecast for three nights, a timeline, what's worth looking at (passes, planets, showers, eclipses incl. daytime solar eclipses, special Moons), and the next 30 days.
+
 ## New in v0.3
 - **Sky** — live star map. Hold the phone up (Live) or swipe (Drag). Tap anything to identify it; *Find* + *Guide me to it* gives a green arrow. Works in daylight (stars drawn for reference), with a time scrubber (±1 h / ±1 day) and layer toggles.
 - **Passes** — ISS, Tiangong, Hubble and a *More…* list of other bright satellites.
 - **Events** — lunar and solar eclipses for your location (with local times and eye-safety notes), Blood/Blue/Super/Harvest/Hunter's Moons, planet oppositions, best-view dates and conjunctions, plus the meteor-shower calendar.
 
 ## Credits
+- Cloud forecast: Open-Meteo.com (CC BY 4.0).
 - Star and constellation data: d3-celestial (BSD-3-Clause), derived from the Hipparcos/Yale Bright Star catalogues.
 Orbit maths: satellite.js (MIT). Sun/Moon/planets/radiants: astronomy-engine (MIT). Magnetic declination: NOAA World Magnetic Model 2025 via geomagnetism (Apache-2.0). ISS orbit data: CelesTrak, with backup sources. ZIP lookup: zippopotam.us. Licences are in `lib/THIRD-PARTY-LICENSES.txt`.
 Shower dates follow the International Meteor Organization / American Meteor Society calendars and are approximate.

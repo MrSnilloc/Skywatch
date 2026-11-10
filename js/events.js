@@ -206,3 +206,23 @@ export function planetEvents(from, months, loc) {
   void loc; void dirName;
   return ev.sort((x, y) => x.date - y.date);
 }
+
+
+// ---------- one cached bundle of everything, shared by the Events and Look Up screens ----------
+
+let cache = null;
+
+/** All event lists for the current location, computed once per location per day. */
+export function eventData(c) {
+  const l = c.location();
+  const key = `${l.lat.toFixed(2)},${l.lon.toFixed(2)},${new Date().toDateString()}`;
+  if (cache && cache.key === key) return cache;
+  const now = new Date();
+  const from = new Date(now.getTime() - 3 * 3600e3);
+  const lunar = lunarEclipses(from, 14, l);
+  const solar = solarEclipses(from, 14, l);
+  const moons = fullMoons(from, 30, lunar);
+  const planets = planetEvents(now, 24, l);
+  cache = { key, lunar, solar, moons, planets, eclipses: [...lunar, ...solar].sort((a, b) => a.peak - b.peak) };
+  return cache;
+}
