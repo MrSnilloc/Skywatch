@@ -51,7 +51,10 @@ export const CONFIG = {
     ],
     groupUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle',   // ~150 brightest satellites
     groupMax: 160,
-    overheadMinEl: 5,        // sky map marks satellites above this elevation
+    overheadMinEl: 5,
+    // Starlink "trains": satellites from launches in the last 30 days still fly in a visible line.
+    starlinkUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle',
+    starlinkFadeDays: 14,    // after this the train spreads out and dims (still listed, marked "fading")        // sky map marks satellites above this elevation
   },
 
   sky: {

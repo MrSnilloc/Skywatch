@@ -52,6 +52,9 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 
+## New in v0.5
+- **Starlink trains** on the Passes tab (and in Look Up / the Sky map): recent launches grouped into trains, with pass times. Trains older than ~2 weeks are marked fading.
+
 ## New in v0.4
 - **Look Up** replaces Tonight: a plan for today *and* tonight — cloud forecast for three nights, a timeline, what's worth looking at (passes, planets, showers, eclipses incl. daytime solar eclipses, special Moons), and the next 30 days.
 

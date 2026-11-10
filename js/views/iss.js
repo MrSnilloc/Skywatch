@@ -4,7 +4,7 @@ import * as sky from '../sky.js';
 import { issLive } from '../iss.js';
 import { passesToICS, downloadICS } from '../ics.js';
 import { refreshIss, visiblePasses } from '../issService.js';
-import { entryFor, listChoices, loadSat, loadGroup, addFromGroup, computeEntry } from '../satellites.js';
+import { entryFor, listChoices, loadSat, loadGroup, addFromGroup, computeEntry, loadStarlink, starlinkState } from '../satellites.js';
 import { fmtTime, fmtTimeSec, fmtDay, fmtCountdown, fmtAge } from '../time.js';
 import { store } from '../store.js';
 import { icons, polarSVG, toast, esc } from '../ui.js';
@@ -45,6 +45,7 @@ function passCard(p) {
 
 function liveHTML() {
   const iss = entry(), nm = satName();
+  if (!iss.satrec) return '';
   if (iss.status !== 'ready') return '';
   const p = issLive(iss.satrec, ctx.location(), new Date());
   if (!p) return '<div class="muted">Orbit data is too old to predict. Refresh in Settings.</div>';
@@ -71,10 +72,24 @@ function statusHTML() {
 
 function chipsHTML() {
   const ch = listChoices(ctx);
-  return `<div class="chips">${ch.map(c => `<button class="chip-btn ${c.id === cur ? 'on' : ''}" data-act="sat" data-sat="${c.id}">${esc(c.name)}</button>`).join('')}<button class="chip-btn" data-act="more">More…</button></div>`;
+  return `<div class="chips">${ch.map(c => `<button class="chip-btn ${c.id === cur || (c.id === 'starlink' && cur.startsWith('sl')) ? 'on' : ''}" data-act="sat" data-sat="${c.id}">${esc(c.name)}</button>`).join('')}<button class="chip-btn" data-act="more">More…</button></div>`;
+}
+
+function trainsHTML() {
+  const st = starlinkState(ctx);
+  if (!(cur === 'starlink' || cur.startsWith('sl'))) return '';
+  const intro = `<div class="card"><div class="eyebrow">Starlink trains</div>
+    <div class="sub">Right after launch, Starlink satellites fly in a tight line — a “train” of 20–60 lights crossing the sky one after another. After about two weeks they spread out and climb higher, and the train fades. Thousands of older Starlinks are up there too, but they’re usually too faint to notice.</div></div>`;
+  if (st.status !== 'ready') return intro;
+  if (!st.trains.length) return intro + '<div class="card"><div class="muted">No Starlink launches in the last 30 days.</div></div>';
+  return intro + `<div class="chips">${st.trains.map(id => { const e = ctx.sats.items[id]; return `<button class="chip-btn ${id === cur ? 'on' : ''}" data-act="sat" data-sat="${id}">Launched ~${esc(e.name.replace(/Starlink train \(|\)/g, ''))} · ${e.train.count} sats${e.train.fading ? ' · fading' : ''}</button>`; }).join('')}</div>`;
 }
 
 function render() {
+  if (cur === 'starlink') {
+    const st = starlinkState(ctx);
+    if (st.status === 'ready' && st.trains.length) cur = st.trains[0];
+  }
   const iss = entry();
   const list = iss.status === 'ready' ? visiblePasses(ctx, iss) : [];
   const showAll = store.get('showAllPasses');
@@ -83,6 +98,7 @@ function render() {
 
   root.innerHTML = `
     ${chipsHTML()}
+    ${trainsHTML()}
     ${statusHTML()}
     ${warn ? `<div class="card warn"><div class="sub">${iss.error ? 'Couldn’t refresh orbit data — using saved data. ' : ''}${iss.stale ? `${satName()} orbit data is ${fmtAge(age)} old; times may be off by a minute or more.` : ''}</div></div>` : ''}
     ${iss.status === 'ready' ? `<div class="card live" id="live">${liveHTML()}</div>
@@ -116,6 +132,7 @@ function openMore() {
 
 function pick(id) {
   cur = id; expanded.clear();
+  if (id === 'starlink') { const st = starlinkState(ctx); if (st.status === 'idle' || st.status === 'error') loadStarlink(ctx); render(); return; }
   const e = entry();
   if (id !== 'iss' && e.status === 'idle') { if (e.extra) { computeEntry(ctx, id); } else loadSat(ctx, id); }
   render();
@@ -139,7 +156,7 @@ function onClick(e) {
       if (!v.length) { toast('No visible passes to add'); break; }
       downloadICS(passesToICS(v, ctx.config.iss.calendarLeadMin, satName())); toast(`Open the file to add ${v.length} passes to Calendar`); break;
     }
-    case 'refetch': cur === 'iss' ? refreshIss(ctx, { forceFetch: true }) : loadSat(ctx, cur, { force: true }); break;
+    case 'refetch': cur === 'starlink' ? loadStarlink(ctx, { force: true }) : cur === 'iss' ? refreshIss(ctx, { forceFetch: true }) : loadSat(ctx, cur, { force: true }); break;
   }
 }
 
@@ -151,7 +168,8 @@ export const issView = {
     el.innerHTML = '<div class="stack" id="iss-body"></div>';
     root = el.querySelector('#iss-body');
     root.addEventListener('click', onClick);
-    const e0 = entry(); if (cur !== 'iss' && e0.status === 'idle') { e0.extra ? computeEntry(ctx, cur) : loadSat(ctx, cur); }
+    if (cur === 'starlink' || cur.startsWith('sl')) { const st = starlinkState(ctx); if (st.status === 'idle') loadStarlink(ctx); }
+    const e0 = entry(); if (cur !== 'iss' && cur !== 'starlink' && e0.status === 'idle') { e0.extra ? computeEntry(ctx, cur) : loadSat(ctx, cur); }
     render();
     this._off = ctx.bus.on('iss', render);
   },

@@ -4,7 +4,7 @@
 import * as sky from '../sky.js';
 import { buildPlan } from '../outlook.js';
 import { fetchClouds, avgCloud, cloudVerdict } from '../weather.js';
-import { loadSat } from '../satellites.js';
+import { loadSat, loadStarlink, starlinkState } from '../satellites.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
 
@@ -133,6 +133,7 @@ export const tonightView = {
       const e = ctx.sats.items[f.id];
       if (e && e.status === 'idle') satTimers.push(setTimeout(() => loadSat(ctx, f.id), 1500 + i * 2500));
     });
+    if (starlinkState(ctx).status === 'idle') satTimers.push(setTimeout(() => loadStarlink(ctx), 7000));
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
   tick() { if (root && Date.now() - planAt > 60000) render(); },

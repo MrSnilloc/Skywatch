@@ -100,10 +100,11 @@ export function buildPlan(ctx, now = new Date()) {
   const entries = [ctx.iss, ...Object.values(ctx.sats ? ctx.sats.items : {})].filter(e => e && e.status === 'ready');
   for (const e of entries) {
     const name = e.name || 'ISS';
+    if (e.train && e.train.fading) continue;                       // old trains have spread out
     for (const p of visiblePasses(ctx, e).filter(x => x.visible && x.visStart <= windowEnd).slice(0, 3)) {
       const when = p.visStart;
-      items.push({ kind: 'pass', when, until: p.visEnd, title: `${name} flyover`, score: 40 + Math.min(40, p.peak.el / 2),
-        detail: `${showersDir(p.rise.az)} → ${showersDir(p.set.az)} · up to ${Math.round(p.peak.el)}° · ${p.brightness}`, go: 'passes', sat: e.id || 'iss' });
+      items.push({ kind: 'pass', when, until: p.visEnd, title: e.train ? `Starlink train — ${e.train.count} satellites in a line` : `${name} flyover`, score: (e.train ? 50 : 40) + Math.min(40, p.peak.el / 2),
+        detail: `${e.train ? 'Starts ' : ''}${showersDir(p.rise.az)} → ${showersDir(p.set.az)} · up to ${Math.round(p.peak.el)}° · ${p.brightness}`, go: 'passes', sat: e.id || 'iss' });
     }
   }
 
