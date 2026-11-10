@@ -7,7 +7,8 @@
 
 import { tonightView } from './tonight.js';
 import { issView } from './iss.js';
-import { showersView } from './showers.js';
+import { skyView } from './skymap.js';
+import { eventsView } from './events.js';
 import { pointView } from './point.js';
 
-export const views = [tonightView, issView, showersView, pointView];
+export const views = [tonightView, skyView, issView, eventsView, pointView];

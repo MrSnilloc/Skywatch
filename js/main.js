@@ -7,6 +7,7 @@ import { views } from './views/index.js';
 import { openSettings } from './views/settings.js';
 import { refreshIss, needsRecompute } from './issService.js';
 import { icons } from './ui.js';
+import { initSats, recomputeLoaded } from './satellites.js';
 
 const ctx = {
   config: CONFIG,
@@ -17,6 +18,7 @@ const ctx = {
   go,
 };
 
+initSats(ctx);
 const viewEl = document.getElementById('view');
 const navEl = document.getElementById('nav');
 let current = null;
@@ -56,9 +58,10 @@ store.onChange((keys) => {
   if (keys.some(k => ['lat', 'lon', 'elev', 'locName'].includes(k))) {
     updateSubtitle();
     refreshIss(ctx);                       // same orbit data, new viewing spot
+    setTimeout(() => { recomputeLoaded(ctx); ctx.bus.emit('iss'); }, 400);
   }
   if (keys.some(k => ['hour12', 'minPeakEl', 'showAllPasses'].includes(k)) && current) {
-    const id = current.id; if (id !== 'point') go(id);
+    const id = current.id; if (id !== 'point' && id !== 'sky') go(id);
   }
 });
 
@@ -75,7 +78,7 @@ setInterval(() => {
 
 // Come back to a fresh picture when the app returns to the foreground.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { if (needsRecompute(ctx)) refreshIss(ctx); if (current && current.id !== 'point') go(current.id); }
+  if (document.visibilityState === 'visible') { if (needsRecompute(ctx)) refreshIss(ctx); if (current && current.id !== 'point' && current.id !== 'sky') go(current.id); }
 });
 
 // Offline support + installability (needs https).

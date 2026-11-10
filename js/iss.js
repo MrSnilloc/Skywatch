@@ -38,6 +38,20 @@ export function parseTLE(text) {
   return { name, l1, l2, epoch: epochFromLine1(l1) };
 }
 
+/** Parse a CelesTrak "3-line" list (name, line1, line2, ...) into [{name,l1,l2,epoch,norad}]. */
+export function parseTLEList(text) {
+  const lines = (text || '').split(/\r?\n/).map(l => l.trimEnd()).filter(Boolean);
+  const out = [];
+  for (let i = 0; i + 2 < lines.length; i++) {
+    if (lines[i + 1].startsWith('1 ') && lines[i + 2].startsWith('2 ') && lines[i + 1].length >= 68) {
+      out.push({ name: lines[i].replace(/^0 /, '').trim(), l1: lines[i + 1], l2: lines[i + 2],
+        epoch: epochFromLine1(lines[i + 1]), norad: parseInt(lines[i + 1].substring(2, 7), 10) });
+      i += 2;
+    }
+  }
+  return out;
+}
+
 /** Try each source in turn until one gives a valid TLE. */
 export async function fetchTLE(sources, timeoutMs = 8000) {
   const errors = [];
@@ -50,6 +64,7 @@ export async function fetchTLE(sources, timeoutMs = 8000) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const tle = parseTLE(await res.text());
       if (!tle) throw new Error('unreadable data');
+      tle.source = new URL(url).host;
       return tle;
     } catch (e) {
       errors.push(`${new URL(url).host}: ${e.message}`);

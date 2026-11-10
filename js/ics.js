@@ -12,7 +12,7 @@ function utc(d) {
 const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
 /** Build the text of an .ics file for a list of passes. */
-export function passesToICS(passes, leadMin = 10) {
+export function passesToICS(passes, leadMin = 10, name = 'ISS') {
   const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sky Watch//ISS passes//EN', 'CALSCALE:GREGORIAN'];
   const stamp = utc(new Date());
   for (const p of passes) {
@@ -21,16 +21,16 @@ export function passesToICS(passes, leadMin = 10) {
     const from = dirName(p.rise.az), to = dirName(p.set.az);
     out.push(
       'BEGIN:VEVENT',
-      `UID:iss-${p.rise.t.getTime()}@skywatch`,
+      `UID:${name.replace(/\W/g, '')}-${p.rise.t.getTime()}@skywatch`,
       `DTSTAMP:${stamp}`,
       `DTSTART:${utc(start)}`,
       `DTEND:${utc(end)}`,
-      `SUMMARY:${esc(`ISS flyover — look ${from}, max ${Math.round(p.peak.el)}°`)}`,
+      `SUMMARY:${esc(`${name} flyover — look ${from}, max ${Math.round(p.peak.el)}°`)}`,
       `DESCRIPTION:${esc(`Appears ${from}, passes ${dirName(p.peak.az)} at ${Math.round(p.peak.el)}° up, disappears ${to}. ${p.brightness}.`)}`,
       'BEGIN:VALARM',
       `TRIGGER:-PT${leadMin}M`,
       'ACTION:DISPLAY',
-      `DESCRIPTION:${esc(`ISS in ${leadMin} minutes — look ${from}`)}`,
+      `DESCRIPTION:${esc(`${name} in ${leadMin} minutes — look ${from}`)}`,
       'END:VALARM',
       'END:VEVENT',
     );
@@ -39,8 +39,21 @@ export function passesToICS(passes, leadMin = 10) {
   return out.join('\r\n') + '\r\n';
 }
 
+/** Generic calendar file: items = [{uid,start,end,summary,desc,leadMin}] */
+export function eventsToICS(items) {
+  const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sky Watch//Sky events//EN', 'CALSCALE:GREGORIAN'];
+  const stamp = utc(new Date());
+  for (const it of items) {
+    out.push('BEGIN:VEVENT', `UID:${it.uid}@skywatch`, `DTSTAMP:${stamp}`, `DTSTART:${utc(it.start)}`, `DTEND:${utc(it.end)}`,
+      `SUMMARY:${esc(it.summary)}`, `DESCRIPTION:${esc(it.desc || '')}`,
+      'BEGIN:VALARM', `TRIGGER:-PT${it.leadMin || 30}M`, 'ACTION:DISPLAY', `DESCRIPTION:${esc(it.summary)}`, 'END:VALARM', 'END:VEVENT');
+  }
+  out.push('END:VCALENDAR');
+  return out.join('\r\n') + '\r\n';
+}
+
 /** Hand the .ics to the phone (Android offers to open it in Calendar). */
-export function downloadICS(text, filename = 'skywatch-iss-passes.ics') {
+export function downloadICS(text, filename = 'skywatch-events.ics') {
   const blob = new Blob([text], { type: 'text/calendar' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

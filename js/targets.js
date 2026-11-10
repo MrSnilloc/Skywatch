@@ -9,6 +9,7 @@
 
 import * as sky from './sky.js';
 import { issLive } from './iss.js';
+import { skyData as skyDataNow } from './skydata.js';
 import { byCode, radiantNow, gazeSpot, activeShowers } from './showers.js';
 
 const moonProvider = {
@@ -61,7 +62,46 @@ const showerProvider = {
   },
 };
 
-const providers = [issProvider, moonProvider, planetProvider, showerProvider];
+// Other satellites ("sat:css", "sat:hst", "sat:n12345"), looked up from whatever orbit data is loaded.
+const satProvider = {
+  list: () => [],
+  resolve(id, ctx, date) {
+    if (!id.startsWith('sat:')) return null;
+    const key = id.slice(4);
+    if (key === 'iss') return issProvider.resolve('iss', ctx, date);
+    let name = key, satrec = null;
+    const e = ctx.sats && ctx.sats.items[key];
+    if (e && e.satrec) { name = e.name; satrec = e.satrec; }
+    else if (ctx.sats) {
+      const t = ctx.sats.group.list.find(x => 'n' + x.norad === key || (ctx.config.sats.featured.find(f => f.id === key) || {}).norad === x.norad);
+      if (t) { name = t.name; satrec = t.satrec; }
+    }
+    if (!satrec) return { id, label: name, az: 0, alt: 0, unavailable: true, note: 'Orbit data not loaded' };
+    const p = issLive(satrec, ctx.location(), date);
+    if (!p) return { id, label: name, az: 0, alt: 0, unavailable: true, note: 'Orbit data is out of range' };
+    return { id, label: name, az: p.az, alt: p.el, note: `${Math.round(p.rangeKm)} km away · ${p.sunlit ? 'sunlit' : 'in Earth’s shadow (can’t be seen)'}` };
+  },
+};
+
+// Stars and deep-sky objects picked on the Sky map ("star:123", "dso:4").
+const starProvider = {
+  list: () => [],
+  resolve(id, ctx, date) {
+    const D = skyDataNow();
+    if (!D || !(id.startsWith('star:') || id.startsWith('dso:'))) return null;
+    const i = +id.slice(5);
+    if (id.startsWith('star:')) {
+      const s = D.raw.stars[i]; if (!s) return null;
+      const p = sky.fixedPosition(s[0], s[1], date, sky.makeObserver(ctx.location()));
+      return { id, label: D.raw.names[i] || 'Star', az: p.az, alt: p.alt, note: `magnitude ${s[2].toFixed(1)}` };
+    }
+    const d = D.raw.dso[i]; if (!d) return null;
+    const p = sky.fixedPosition(d[0], d[1], date, sky.makeObserver(ctx.location()));
+    return { id, label: d[5] || d[4], az: p.az, alt: p.alt, note: d[4] };
+  },
+};
+
+const providers = [issProvider, moonProvider, planetProvider, showerProvider, satProvider, starProvider];
 
 export function listTargets(ctx) {
   return providers.flatMap(p => p.list(ctx));

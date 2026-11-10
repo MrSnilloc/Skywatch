@@ -19,7 +19,7 @@ export async function refreshIss(ctx, { forceFetch = false } = {}) {
   if (forceFetch || !fresh) {
     try {
       const t = await fetchTLE(cfg.tleSources, cfg.fetchTimeoutMs);
-      tle = { name: t.name, l1: t.l1, l2: t.l2, epoch: t.epoch.getTime(), fetchedAt: Date.now() };
+      tle = { name: t.name, l1: t.l1, l2: t.l2, epoch: t.epoch.getTime(), fetchedAt: Date.now(), source: t.source };
       store.setCache('tle', tle);
     } catch (e) {
       iss.error = e.message; // fall back to cached data below, if any
@@ -38,11 +38,11 @@ export async function refreshIss(ctx, { forceFetch = false } = {}) {
 }
 
 /** Passes the user would actually want to see, honouring their settings. */
-export function visiblePasses(ctx) {
+export function visiblePasses(ctx, e = ctx.iss) {
   const min = store.get('minPeakEl');
   const all = store.get('showAllPasses');
   const now = Date.now();
-  return ctx.iss.passes.filter(p => p.set.t.getTime() > now && (all || (p.visible && p.peak.el >= min)));
+  return e.passes.filter(p => p.set.t.getTime() > now && (all || (p.visible && p.peak.el >= min)));
 }
 
 /** Recompute when location changes or the list has run dry. */

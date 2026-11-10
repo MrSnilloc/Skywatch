@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'Sky Watch',
-  version: '0.1.0',
+  version: '0.3.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -37,6 +37,21 @@ export const CONFIG = {
     darkSunAlt: -6,          // observer's Sun must be this far below the horizon (civil twilight)
     minVisibleEl: 5,         // a moment only counts as "visible" above this elevation
     calendarLeadMin: 10,     // calendar reminder fires this many minutes before the pass
+  },
+
+  sats: {
+    // Extra satellites offered on the Passes screen (ISS is built in). Sources are tried in order.
+    featured: [
+      { id: 'css', name: 'Tiangong', blurb: 'Chinese space station', norad: 48274 },
+      { id: 'hst', name: 'Hubble', blurb: 'Space telescope', norad: 20580 },
+    ],
+    singleUrl: (n) => [
+      `https://celestrak.org/NORAD/elements/gp.php?CATNR=${n}&FORMAT=tle`,
+      `https://tle.ivanstanojevic.me/api/tle/${n}`,
+    ],
+    groupUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle',   // ~150 brightest satellites
+    groupMax: 160,
+    overheadMinEl: 5,        // sky map marks satellites above this elevation
   },
 
   sky: {

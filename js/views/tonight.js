@@ -37,12 +37,12 @@ function planetRow(p, sunAlt) {
 
 function issTeaser() {
   const iss = ctx.iss;
-  if (iss.status === 'loading' || iss.status === 'idle') return `<div class="card tap" data-go="iss"><div class="eyebrow">Space Station</div><div class="muted">Loading ISS orbit data…</div></div>`;
-  if (iss.status === 'error') return `<div class="card tap warn" data-go="iss"><div class="eyebrow">Space Station</div><div>Couldn’t load ISS orbit data — tap for details.</div></div>`;
+  if (iss.status === 'loading' || iss.status === 'idle') return `<div class="card tap" data-go="passes"><div class="eyebrow">Space Station</div><div class="muted">Loading ISS orbit data…</div></div>`;
+  if (iss.status === 'error') return `<div class="card tap warn" data-go="passes"><div class="eyebrow">Space Station</div><div>Couldn’t load ISS orbit data — tap for details.</div></div>`;
   const next = visiblePasses(ctx).find(p => p.visible);
-  if (!next) return `<div class="card tap" data-go="iss"><div class="eyebrow">Space Station</div><div class="muted">No visible ISS passes in the next ${ctx.config.iss.passDays} days.</div></div>`;
+  if (!next) return `<div class="card tap" data-go="passes"><div class="eyebrow">Space Station</div><div class="muted">No visible ISS passes in the next ${ctx.config.iss.passDays} days.</div></div>`;
   const when = next.visStart || next.rise.t;
-  return `<div class="card tap" data-go="iss">
+  return `<div class="card tap" data-go="passes">
     <div class="eyebrow">Next visible ISS pass</div>
     <div class="big">${fmtDay(when)} · ${fmtTime(when)} <span class="chip-s">${fmtCountdown(when - Date.now())}</span></div>
     <div class="muted">${sky.dirName(next.rise.az)} → ${sky.dirName(next.set.az)} · up to ${Math.round(next.peak.el)}° · ${next.brightness}</div></div>`;
@@ -52,7 +52,7 @@ function showerTeaser(now, obs) {
   const c = showers.calendar(now, obs).find(x => x.sh.zhr >= 15 || x.st.phase === 'peak');
   if (!c) return '';
   const when = c.st.phase === 'peak' ? 'peak tonight' : fmtCountdown(c.st.next.peakAt - now);
-  return `<div class="card tap" data-go="showers"><div class="eyebrow">Meteor showers</div>
+  return `<div class="card tap" data-go="events" data-sec="showers"><div class="eyebrow">Meteor showers</div>
     <div class="big">${c.sh.name} · ${showers.peakLabel(c.st.next)} <span class="chip-s">${when}</span></div>
     <div class="muted">Up to ${c.sh.zhr}/hr · ${c.moonAtPeak.label} at peak</div></div>`;
 }
@@ -99,7 +99,7 @@ function onClick(e) {
   const t = e.target.closest('[data-target],[data-go]');
   if (!t) return;
   if (t.dataset.target) ctx.go('point', { target: t.dataset.target });
-  else ctx.go(t.dataset.go);
+  else ctx.go(t.dataset.go, t.dataset.sec ? { section: t.dataset.sec } : undefined);
 }
 
 export const tonightView = {
