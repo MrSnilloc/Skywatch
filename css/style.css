@@ -330,3 +330,5 @@ body[data-view="point"] #fab, body[data-view="sky"] #fab, body.no-fab #fab, body
 #fab.placed { bottom: auto !important; right: auto !important; }
 #fab.dragging { transform: scale(1.08); box-shadow: 0 10px 30px #000c, 0 0 0 2px var(--good); transition: none; }
 .sp-center { position: absolute; left: 10px; top: 76px; }
+.set-row.col { flex-direction: column; align-items: stretch; gap: 8px; }
+.set-row .txt { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 13px; }

@@ -29,7 +29,9 @@ export function planesHTML(c) {
   ctx = c;
   const P = ctx.planes;
   const status = !P || P.status === 'idle' || (P.status === 'loading' && !P.list.length) ? '<div class="card"><div class="muted">Listening for planes…</div></div>'
-    : P.status === 'error' ? `<div class="card warn"><div class="big">Couldn’t reach the plane feeds</div><div class="muted">${esc(P.error || '')}</div><p class="tip">These free feeds sometimes block web apps; the Android-app version won’t have that problem.</p></div>` : '';
+    : P.status === 'error' ? (P.needsRelay
+      ? `<div class="card warn"><div class="big">Planes need your relay</div><div class="muted">Web browsers block the live plane feeds for web apps. Set up your free Sky Watch relay (see relay/README.md), then paste its address in <b>Settings → Plane data</b>.</div><p class="tip">The Android-app version won’t need this.</p></div>`
+      : `<div class="card warn"><div class="big">Couldn’t reach the plane feeds</div><div class="muted">${esc(P.error || '')}</div></div>`) : '';
   const mapCtl = `<div class="map-ctl">
       <button class="chip" data-mz="1" aria-label="Zoom in">＋</button><button class="chip" data-mz="-1" aria-label="Zoom out">－</button>
       <button class="chip" data-a="me" aria-label="Centre on me">◎</button>

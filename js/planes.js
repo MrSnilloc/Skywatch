@@ -2,6 +2,8 @@
 // ctx.planes = { status, error, list:[plane], at, source }
 // plane: { id, call, type, reg, lat, lon, altFt, gsKt, track, vrate, seen }
 
+import { store } from './store.js';
+
 const RAD = Math.PI / 180, DEG = 180 / Math.PI, RE = 6371000, FT = 0.3048;
 
 function normADSB(j) {
@@ -26,11 +28,15 @@ export async function loadPlanes(ctx, { force = false } = {}) {
   if (P.status === 'loading' || (!force && Date.now() - P.at < cfg.refreshSec * 800)) return;
   P.status = P.list.length ? 'ready' : 'loading'; P.busy = true; ctx.bus.emit('planes');
   const loc = ctx.location(), errs = [];
-  const order = P.source ? [P.sourceUrl, ...cfg.sources.filter(s => s !== P.sourceUrl)] : cfg.sources;
+  const relay = (store.get('relayUrl') || '').trim().replace(/\/+$/, '');
+  const all = cfg.sources.filter(s => s !== 'relay' || relay);
+  const order = P.sourceUrl && all.includes(P.sourceUrl) ? [P.sourceUrl, ...all.filter(s => s !== P.sourceUrl)] : all;
   for (const src of order) {
     try {
       let url;
-      if (src === 'opensky') {
+      if (src === 'relay') {
+        url = `${relay}/planes?lat=${loc.lat.toFixed(3)}&lon=${loc.lon.toFixed(3)}&nm=${cfg.radiusNm}`;
+      } else if (src === 'opensky') {
         const dLat = cfg.radiusNm / 60, dLon = dLat / Math.cos(loc.lat * RAD);
         url = `https://opensky-network.org/api/states/all?lamin=${(loc.lat - dLat).toFixed(3)}&lomin=${(loc.lon - dLon).toFixed(3)}&lamax=${(loc.lat + dLat).toFixed(3)}&lomax=${(loc.lon + dLon).toFixed(3)}`;
       } else url = src.replace('{lat}', loc.lat.toFixed(4)).replace('{lon}', loc.lon.toFixed(4)).replace('{nm}', cfg.radiusNm);
@@ -52,10 +58,10 @@ export async function loadPlanes(ctx, { force = false } = {}) {
       P.source = new URL(url).host; P.sourceUrl = src; P.at = Date.now(); P.status = 'ready'; P.error = null; P.busy = false;
       ctx.bus.emit('planes');
       return;
-    } catch (e) { errs.push(`${src === 'opensky' ? 'opensky-network.org' : new URL(src.replace(/\{\w+\}/g, '0')).host}: ${e.name === 'AbortError' ? 'timed out' : e.message}`); }
+    } catch (e) { errs.push(`${src === 'relay' ? 'your relay' : src === 'opensky' ? 'opensky-network.org' : new URL(src.replace(/\{\w+\}/g, '0')).host}: ${e.name === 'AbortError' ? 'timed out' : e.message}`); }
   }
   P.busy = false; P.at = Date.now();
-  if (!P.list.length) { P.status = 'error'; P.error = errs.join('; '); }
+  if (!P.list.length) { P.status = 'error'; P.error = errs.join('; '); P.needsRelay = !relay; }
   ctx.bus.emit('planes');
 }
 

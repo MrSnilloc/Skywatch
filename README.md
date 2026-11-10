@@ -56,6 +56,9 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 
+## Plane relay (web version)
+Browsers block the live plane feeds for web apps, so the web version gets planes through your own free Cloudflare relay: see **relay/README.md** (about 10 minutes, once), then paste its address in *Settings → Plane data*. The future Android app can read the feeds directly.
+
 ## New in v0.9
 - **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
 - **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.

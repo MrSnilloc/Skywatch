@@ -16,6 +16,7 @@ export const CONFIG = {
     azOffset: 0,             // extra compass trim set by "Calibrate" on the Point screen
     hour12: true,
     nightMode: false,        // red night-vision theme
+    relayUrl: '',            // your Cloudflare relay, e.g. https://skywatch-relay.yourname.workers.dev
     showFab: true,           // floating "What's this?" camera button
     planeAlerts: true,       // Look Up shows planes about to pass overhead
     minPeakEl: 10,           // hide ISS passes that never climb above this many degrees
@@ -55,7 +56,7 @@ export const CONFIG = {
     groupMax: 160,
     overheadMinEl: 5,
     // Starlink "trains": satellites from launches in the last 30 days still fly in a visible line.
-    starlinkUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle',
+    starlinkUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=json',
     starlinkFadeDays: 14,    // after this the train spreads out and dims (still listed, marked "fading")        // sky map marks satellites above this elevation
   },
 
@@ -71,6 +72,7 @@ export const CONFIG = {
     // Orbit elements for every known comet. Minor Planet Center first, NASA/JPL as backup. Cached for a day.
     urls: [
       'https://www.minorplanetcenter.net/iau/MPCORB/CometEls.txt',
+      'relay:comets',
       'https://ssd-api.jpl.nasa.gov/sbdb_query.api?fields=full_name,q,e,i,om,w,tp,M1,K1&sb-kind=c&sb-cdata=' + encodeURIComponent('{"AND":["M1|DF"]}'),
     ],
     cacheHours: 24,
@@ -81,7 +83,10 @@ export const CONFIG = {
 
   planes: {
     // Free live aircraft feeds (ADS-B), tried in order. {lat} {lon} {nm} are filled in.
+    // Web browsers block these feeds for web apps, so a web install goes through YOUR relay first
+    // (relay/skywatch-relay.js on Cloudflare; its address goes in Settings). The Android app can use them directly.
     sources: [
+      'relay',
       'https://api.adsb.lol/v2/point/{lat}/{lon}/{nm}',
       'https://api.airplanes.live/v2/point/{lat}/{lon}/{nm}',
       'opensky',

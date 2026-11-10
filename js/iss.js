@@ -52,6 +52,42 @@ export function parseTLEList(text) {
   return out;
 }
 
+// ---------- CelesTrak JSON (OMM) -> classic TLE lines ----------
+// Some CelesTrak lists only come as JSON now; satellite.js wants the two classic lines, so we rebuild them.
+
+function tleChecksum(line) {
+  let s = 0;
+  for (const ch of line.slice(0, 68)) { if (ch >= '0' && ch <= '9') s += +ch; else if (ch === '-') s += 1; }
+  return String(s % 10);
+}
+function tleExp(v) {                 // 0.00012345 -> " 12345-3"
+  if (!v) return ' 00000-0';
+  let e = Math.floor(Math.log10(Math.abs(v))) + 1, m = Math.round(Math.abs(v) / Math.pow(10, e) * 1e5);
+  if (m >= 100000) { m = 10000; e += 1; }
+  return (v < 0 ? '-' : ' ') + String(m).padStart(5, '0') + (e < 0 ? '-' : '+') + Math.abs(e);
+}
+export function ommToTLE(o) {
+  const id = String(o.NORAD_CAT_ID).padStart(5, '0').slice(-5);
+  const m = /^(\d{4})-(\d{3})(\w*)$/.exec(o.OBJECT_ID || '');
+  const intl = m ? (m[1].slice(2) + m[2] + m[3]).padEnd(8) : '        ';
+  const ep = new Date(o.EPOCH.endsWith('Z') ? o.EPOCH : o.EPOCH + 'Z');
+  const y = ep.getUTCFullYear(), doy = (ep - Date.UTC(y, 0, 1)) / 86400000 + 1;
+  const epoch = String(y).slice(2) + doy.toFixed(8).padStart(12, '0');
+  const nd = +o.MEAN_MOTION_DOT || 0;
+  const ndot = (nd < 0 ? '-' : ' ') + Math.abs(nd).toFixed(8).replace(/^0/, '');
+  let l1 = `1 ${id}U ${intl} ${epoch} ${ndot} ${tleExp(+o.MEAN_MOTION_DDOT || 0)} ${tleExp(+o.BSTAR || 0)} 0 ${String(o.ELEMENT_SET_NO || 999).padStart(4).slice(-4)}`;
+  const f = (v, w, d) => (+v).toFixed(d).padStart(w);
+  let l2 = `2 ${id} ${f(o.INCLINATION, 8, 4)} ${f(o.RA_OF_ASC_NODE, 8, 4)} ${(+o.ECCENTRICITY).toFixed(7).slice(2)} ${f(o.ARG_OF_PERICENTER, 8, 4)} ${f(o.MEAN_ANOMALY, 8, 4)} ${f(o.MEAN_MOTION, 11, 8)}${String(o.REV_AT_EPOCH || 0).padStart(5).slice(-5)}`;
+  l1 = l1.padEnd(68).slice(0, 68); l2 = l2.padEnd(68).slice(0, 68);
+  return { name: (o.OBJECT_NAME || '').trim(), l1: l1 + tleChecksum(l1), l2: l2 + tleChecksum(l2), epoch: ep, norad: +o.NORAD_CAT_ID };
+}
+/** Accepts either classic TLE text or a CelesTrak JSON array. */
+export function parseAnyTLEList(text) {
+  const t = (text || '').trim();
+  if (t.startsWith('[')) { try { return JSON.parse(t).map(ommToTLE); } catch (e) { return []; } }
+  return parseTLEList(t);
+}
+
 /** Try each source in turn until one gives a valid TLE. */
 export async function fetchTLE(sources, timeoutMs = 8000) {
   const errors = [];

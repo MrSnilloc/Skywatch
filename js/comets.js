@@ -42,18 +42,20 @@ export async function loadComets(ctx, { force = false } = {}) {
   const fresh = cached && Date.now() - cached.fetchedAt < ctx.config.comets.cacheHours * 3600e3;
   if (force || !fresh) {
     const errs = [];
-    for (const url of ctx.config.comets.urls) {
+    const relay = (store.get('relayUrl') || '').trim().replace(/\/+$/, '');
+    const urls = ctx.config.comets.urls.map(u => u === 'relay:comets' ? (relay ? relay + '/comets' : null) : u).filter(Boolean);
+    for (const url of urls) {
       try {
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const list = url.includes('jpl') ? parseJPL(await res.json()) : (await res.text()).split(/\r?\n/).map(parseMPCLine).filter(Boolean);
+        const list = (url.includes('jpl') || url.endsWith('/comets')) ? parseJPL(await res.json()) : (await res.text()).split(/\r?\n/).map(parseMPCLine).filter(Boolean);
         if (!list.length) throw new Error('no comets in reply');
         cached = { fetchedAt: Date.now(), source: new URL(url).host, list };
         store.setCache('comets', cached);
         break;
       } catch (e) { errs.push(`${new URL(url).host}: ${e.message}`); }
     }
-    if (!fresh && errs.length === ctx.config.comets.urls.length) C.error = errs.join('; ');
+    if (!fresh && errs.length === urls.length) C.error = errs.join('; ');
   }
   if (!cached) { C.status = 'error'; ctx.bus.emit('comets'); return; }
   C.list = cached.list; C.source = cached.source; C.fetchedAt = cached.fetchedAt; C.status = 'ready';

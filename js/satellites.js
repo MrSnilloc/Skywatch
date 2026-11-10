@@ -5,7 +5,7 @@
 // so the Passes screen can show any of them with the same code.
 // ctx.sats = { items:{id:entry}, group:{status, error, list:[{name,norad,l1,l2,epoch,satrec}], source} }
 
-import { fetchTLE, makeSat, findPasses, parseTLEList, issAt, isSunlit } from './iss.js';
+import { fetchTLE, makeSat, findPasses, parseTLEList, parseAnyTLEList, issAt, isSunlit } from './iss.js';
 import { store } from './store.js';
 
 const tick = () => new Promise(r => setTimeout(r, 30));
@@ -169,7 +169,7 @@ export async function loadStarlink(ctx, { force = false } = {}) {
     try {
       const res = await fetch(ctx.config.sats.starlinkUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const list = parseTLEList(await res.text());
+      const list = parseAnyTLEList(await res.text());
       if (!list.length) throw new Error('unreadable data');
       const trains = groupTrains(list).map(g => ({ launch: g.launch, count: g.count, approxLaunch: +g.approxLaunch,
         rep: { name: g.rep.name, norad: g.rep.norad, l1: g.rep.l1, l2: g.rep.l2, epoch: +g.rep.epoch } }));

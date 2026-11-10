@@ -21,6 +21,9 @@ const SECTIONS = [
     { key: 'minPeakEl', type: 'select', label: 'Only passes that climb above', options: [[10, '10°'], [20, '20°'], [30, '30°'], [45, '45°']] },
     { key: 'showAllPasses', type: 'toggle', label: 'Also list passes I can’t see', hint: 'Daylight or ISS in shadow' },
   ]},
+  { title: 'Plane data', items: [
+    { key: 'relayUrl', type: 'text', label: 'Relay address', placeholder: 'https://skywatch-relay.….workers.dev', hint: 'Your free Cloudflare relay — needed for live planes in the web version' },
+  ]},
   { title: 'Compass', items: [
     { key: 'declAuto', type: 'toggle', label: 'Automatic compass correction', hint: (ctx) => `Currently ${currentDeclination(ctx.location()).toFixed(1)}° for your location` },
     { key: 'declination', type: 'number', label: 'Manual correction (°)', hint: 'Used when automatic is off (west is negative)', step: 0.5 },
@@ -33,6 +36,7 @@ function itemHTML(it, ctx) {
   const hint = hintText ? `<span class="sub">${esc(hintText)}</span>` : '';
   if (it.type === 'toggle') return `<label class="set-row"><span class="grow">${esc(it.label)}${hint}</span><input type="checkbox" data-key="${it.key}" ${v ? 'checked' : ''}><span class="switch"></span></label>`;
   if (it.type === 'select') return `<label class="set-row"><span class="grow">${esc(it.label)}${hint}</span><select data-key="${it.key}" data-num="1">${it.options.map(([val, txt]) => `<option value="${val}" ${+v === val ? 'selected' : ''}>${txt}</option>`).join('')}</select></label>`;
+  if (it.type === 'text') return `<label class="set-row col"><span class="grow">${esc(it.label)}${hint}</span><input class="txt" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="${esc(it.placeholder || '')}" data-key="${it.key}" data-text="1" value="${esc(v || '')}"></label>`;
   if (it.type === 'number') return `<label class="set-row"><span class="grow">${esc(it.label)}${hint}</span><input class="num" type="number" step="${it.step || 1}" data-key="${it.key}" data-num="1" value="${v}"></label>`;
   return '';
 }
@@ -76,6 +80,14 @@ export function openSettings(ctx) {
     if (!t) return;
     const val = t.type === 'checkbox' ? t.checked : (t.dataset.num ? parseFloat(t.value) : t.value);
     if (typeof val === 'number' && isNaN(val)) return;
+    if (t.dataset.key === 'relayUrl') {
+      const u = String(val).trim().replace(/\/+$/, '');
+      t.value = u; store.set('relayUrl', u);
+      if (ctx.planes) { ctx.planes.at = 0; ctx.planes.sourceUrl = null; }
+      if (u) fetch(u + '/', { cache: 'no-store' }).then(r => r.text()).then(x => toast(/relay ok/i.test(x) ? 'Relay works ✓' : 'That address answered, but it isn’t the Sky Watch relay'))
+        .catch(() => toast('Can’t reach that relay — check the address'));
+      return;
+    }
     store.set(t.dataset.key, val);
   };
 
