@@ -9,6 +9,7 @@ import { lookupZip } from '../geo.js';
 import { fmtAge } from '../time.js';
 import { currentDeclination } from '../magnetic.js';
 import { esc, toast } from '../ui.js';
+import { openNotifySettings } from './notifySettings.js';
 
 const SECTIONS = [
   { title: 'Display', items: [
@@ -20,9 +21,6 @@ const SECTIONS = [
   { title: 'ISS passes', items: [
     { key: 'minPeakEl', type: 'select', label: 'Only passes that climb above', options: [[10, '10°'], [20, '20°'], [30, '30°'], [45, '45°']] },
     { key: 'showAllPasses', type: 'toggle', label: 'Also list passes I can’t see', hint: 'Daylight or ISS in shadow' },
-  ]},
-  { title: 'Plane data', items: [
-    { key: 'relayUrl', type: 'text', label: 'Relay address', placeholder: 'https://skywatch-relay.….workers.dev', hint: 'Your free Cloudflare relay — needed for live planes in the web version' },
   ]},
   { title: 'Compass', items: [
     { key: 'declAuto', type: 'toggle', label: 'Automatic compass correction', hint: (ctx) => `Currently ${currentDeclination(ctx.location()).toFixed(1)}° for your location` },
@@ -52,6 +50,8 @@ export function openSettings(ctx) {
       <div class="zip-row"><input id="in-zip" type="text" inputmode="numeric" maxlength="5" placeholder="ZIP code" aria-label="ZIP code"><button class="btn small" data-act="zip">Find</button></div>
       <div class="actions"><button class="btn ghost" data-act="gps">Use my GPS location</button></div>
       <div class="loc-grid"><input id="in-lat" type="number" step="0.001" value="${loc.lat}" aria-label="Latitude"><input id="in-lon" type="number" step="0.001" value="${loc.lon}" aria-label="Longitude"><button class="btn ghost small" data-act="setloc">Set</button></div></div>
+    <h3 class="sect">Notifications</h3>
+    <button class="card tap set-link" data-act="notify"><span class="grow"><span class="val">Choose what to be told about</span><span class="sub">Passes, eclipses, launches, comets, tonight’s sky…</span></span><span class="chev">›</span></button>
     ${SECTIONS.map(s => `<h3 class="sect">${s.title}</h3><div class="card list-in">${s.items.map(it => itemHTML(it, ctx)).join('')}</div>`).join('')}
     <h3 class="sect">Data</h3>
     <div class="card"><div class="sub">ISS orbit data: ${iss.tle ? `${fmtAge(Date.now() - iss.tle.epoch)} old (downloaded ${fmtAge(Date.now() - iss.tle.fetchedAt)} ago)` : 'not loaded'}</div>
@@ -64,6 +64,7 @@ export function openSettings(ctx) {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     if (b.dataset.act === 'close') close();
+    if (b.dataset.act === 'notify') openNotifySettings(ctx, () => openSettings(ctx));
     if (b.dataset.act === 'refresh') { close(); refreshIss(ctx, { forceFetch: true }); toast('Refreshing ISS data…'); }
     if (b.dataset.act === 'gps') useGPS(ctx, sheet);
     if (b.dataset.act === 'zip') useZip(ctx, sheet);
@@ -80,14 +81,6 @@ export function openSettings(ctx) {
     if (!t) return;
     const val = t.type === 'checkbox' ? t.checked : (t.dataset.num ? parseFloat(t.value) : t.value);
     if (typeof val === 'number' && isNaN(val)) return;
-    if (t.dataset.key === 'relayUrl') {
-      const u = String(val).trim().replace(/\/+$/, '');
-      t.value = u; store.set('relayUrl', u);
-      if (ctx.planes) { ctx.planes.at = 0; ctx.planes.sourceUrl = null; }
-      if (u) fetch(u + '/', { cache: 'no-store' }).then(r => r.text()).then(x => toast(/relay ok/i.test(x) ? 'Relay works ✓' : 'That address answered, but it isn’t the Sky Watch relay'))
-        .catch(() => toast('Can’t reach that relay — check the address'));
-      return;
-    }
     store.set(t.dataset.key, val);
   };
 

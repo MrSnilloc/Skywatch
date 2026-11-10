@@ -29,8 +29,8 @@ export function planesHTML(c) {
   ctx = c;
   const P = ctx.planes;
   const status = !P || P.status === 'idle' || (P.status === 'loading' && !P.list.length) ? '<div class="card"><div class="muted">Listening for planes…</div></div>'
-    : P.status === 'error' ? (P.needsRelay
-      ? `<div class="card warn"><div class="big">Planes need your relay</div><div class="muted">Web browsers block the live plane feeds for web apps. Set up your free Sky Watch relay (see relay/README.md), then paste its address in <b>Settings → Plane data</b>.</div><p class="tip">The Android-app version won’t need this.</p></div>`
+    : P.status === 'error' ? (P.webOnly
+      ? `<div class="card warn"><div class="big">✈ Live planes are in the Android app</div><div class="muted">Web browsers block the free plane-tracking feeds for websites, so live planes only work in the installed UpSight Android app. Everything else works here.</div></div>`
       : `<div class="card warn"><div class="big">Couldn’t reach the plane feeds</div><div class="muted">${esc(P.error || '')}</div></div>`) : '';
   const mapCtl = `<div class="map-ctl">
       <button class="chip" data-mz="1" aria-label="Zoom in">＋</button><button class="chip" data-mz="-1" aria-label="Zoom out">－</button>

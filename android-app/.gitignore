@@ -1,0 +1,11 @@
+# Build leftovers — Gradle recreates these every build, so they never go to GitHub
+node_modules/
+www/
+*.apk
+android/local.properties
+build/
+.gradle/
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/

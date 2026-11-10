@@ -672,12 +672,12 @@ function openUfo(photo = null, fwdIn = null) {
   const where = `${sky.dirName(pos.az)} ${Math.round(pos.az)}° · ${Math.round(pos.alt)}° up`;
   const planesNote = ctx.planes && ctx.planes.status === 'ready' ? '' : '<p class="tip">Plane data isn’t loaded, so aircraft weren’t checked.</p>';
   const nLog = getLog().length;
-  const body = best ? `<div class="card ufo-best"><div class="eyebrow">${S.camMode ? 'Sky Watch says it’s…' : 'Most likely'}</div><div class="big">${esc(candLine(best))}</div>
+  const body = best ? `<div class="card ufo-best"><div class="eyebrow">${S.camMode ? 'UpSight says it’s…' : 'Most likely'}</div><div class="big">${esc(candLine(best))}</div>
       <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${best.d < 3 ? 'Right where you’re pointing.' : `About ${Math.round(best.d)}° from where you’re pointing.`}</div>
       <div class="actions"><button class="btn small" data-show="${esc(best.id)}">Show me</button></div></div>
     ${list.length > 1 ? `<h3 class="sect">Also nearby</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
     : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
-      <div class="sub" style="margin-top:4px">Nothing Sky Watch knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
+      <div class="sub" style="margin-top:4px">Nothing UpSight knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
   openSheet(`<div class="sheet-head"><h2>${S.camMode ? (best ? 'Identified!' : 'Hmm…') : 'What’s this?'}</h2><button class="btn ghost small" data-close>Close</button></div>
     ${photo ? `<img class="ufo-photo" src="${photo}" alt="">` : ''}
     <p class="sub" style="margin:4px 0 10px">Checked around ${where}. ${S.mode === 'live' ? 'Phone compasses can be off by 5–10°.' : 'Using the centre of the map.'}</p>
@@ -731,7 +731,7 @@ function openLogList() {
     const d = e.target.closest('[data-del]');
     if (d) { removeFromLog(+d.dataset.del); openLogList(); return; }
     if (e.target.closest('[data-share]')) {
-      const all = 'Sky Watch UFO log\n\n' + log.map(text).join('\n');
+      const all = 'UpSight UFO log\n\n' + log.map(text).join('\n');
       if (navigator.share) navigator.share({ title: 'UFO log', text: all }).catch(() => {});
       else if (navigator.clipboard) navigator.clipboard.writeText(all).then(() => toast('Copied to clipboard'));
     }

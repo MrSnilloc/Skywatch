@@ -8,6 +8,8 @@ import { openSettings } from './views/settings.js';
 import { refreshIss, needsRecompute } from './issService.js';
 import { icons } from './ui.js';
 import { initSats, recomputeLoaded } from './satellites.js';
+import { isNativeApp } from './platform.js';
+import { initNotify } from './notify.js';
 
 const ctx = {
   config: CONFIG,
@@ -112,6 +114,7 @@ applyTheme(); buildNav(); buildFab(); updateSubtitle();
 const startId = (location.hash || '').replace('#', '');
 go(views.some(v => v.id === startId) ? startId : views[0].id);
 refreshIss(ctx);
+initNotify(ctx);
 
 setInterval(() => {
   if (current && current.tick) current.tick(ctx);
@@ -124,6 +127,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Offline support + installability (needs https).
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+// (Not in the Android app: its files are already on the phone.)
+if (!isNativeApp() && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* fine without it */ });
 }

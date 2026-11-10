@@ -1,4 +1,4 @@
-# Sky Watch
+# UpSight
 
 An Android-friendly sky app: ISS flyover times, planets, the Moon, and a finder that points your phone at any of them.
 Dark theme, plus a red night-vision mode (Settings → Red night mode).
@@ -56,13 +56,13 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 
-## Plane relay (web version)
-Browsers block the live plane feeds for web apps, so the web version gets planes through your own free Cloudflare relay: see **relay/README.md** (about 10 minutes, once), then paste its address in *Settings → Plane data*. The future Android app can read the feeds directly.
+## Live planes
+Browsers block the free plane feeds for websites, so live planes (map, radar, overhead alerts, planes in What's this?) work in the **Android app** only. Everything else works in the web version too.
 
 ## New in v0.9
 - **Space → Earth**: the Sun and Moon are in the scene (the Sun glows behind Earth from the night side); the Moon's shadow darkens Earth during solar eclipses and the Moon turns red in lunar eclipses. **Next eclipse ›** jumps to the next one.
 - **Planes** on the Sky map (live ADS-B: adsb.lol / airplanes.live / OpenSky) with callsign, type, altitude, speed, distance; listed in *Find*.
-- **🛸 What's this?** — a floating button on every screen — opens the camera with a crosshair (no labels — no spoilers). Tap **What's this?** and Sky Watch works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
+- **🛸 What's this?** — a floating button on every screen — opens the camera with a crosshair (no labels — no spoilers). Tap **What's this?** and UpSight works out what's in the circle (planets, bright stars, satellites, Starlink trains, planes, comets, launches), shows your snapshot with it circled, and lets you save unknowns to the **UFO log**.
 - **✈ Planes** chip on the Passes tab: live dark street **Map** (Esri Dark Gray, OpenStreetMap backup) (North-up or Heading-up — turns with your phone; pinch, drag, Follow a plane) and **Radar** (25/50/100 mi, trails, "easy to see" ring, planes heading your way). Colours show altitude. **Look Up** shows a banner when a plane is about to pass overhead (Settings to turn off).
 
 ## New in v0.8

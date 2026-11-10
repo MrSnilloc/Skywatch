@@ -179,7 +179,7 @@ function renderComets() {
   const C = ctx.comets;
   if (!C || C.status === 'idle' || C.status === 'loading') return '<div class="card"><div class="muted">Loading comet orbits…</div></div>';
   if (C.status === 'error') return `<div class="card warn"><div class="big">Couldn’t load comet data</div><div class="muted">${esc(C.error || '')}</div>
-    <p class="tip">Some science sites don’t allow web apps to read their data. If this keeps happening, the Android-app version of Sky Watch won’t have this limit.</p>
+    <p class="tip">Some science sites don’t allow web apps to read their data. If this keeps happening, the Android-app version of UpSight won’t have this limit.</p>
     <div class="actions"><button class="btn" data-act="recomet">Try again</button></div></div>`;
   const cfg = ctx.config.comets, obs = sky.makeObserver(ctx.location()), now = new Date();
   const list = interestingComets(ctx, now);

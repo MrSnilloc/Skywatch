@@ -42,13 +42,12 @@ export async function loadComets(ctx, { force = false } = {}) {
   const fresh = cached && Date.now() - cached.fetchedAt < ctx.config.comets.cacheHours * 3600e3;
   if (force || !fresh) {
     const errs = [];
-    const relay = (store.get('relayUrl') || '').trim().replace(/\/+$/, '');
-    const urls = ctx.config.comets.urls.map(u => u === 'relay:comets' ? (relay ? relay + '/comets' : null) : u).filter(Boolean);
+    const urls = ctx.config.comets.urls;
     for (const url of urls) {
       try {
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const list = (url.includes('jpl') || url.endsWith('/comets')) ? parseJPL(await res.json()) : (await res.text()).split(/\r?\n/).map(parseMPCLine).filter(Boolean);
+        const list = url.includes('jpl') ? parseJPL(await res.json()) : (await res.text()).split(/\r?\n/).map(parseMPCLine).filter(Boolean);
         if (!list.length) throw new Error('no comets in reply');
         cached = { fetchedAt: Date.now(), source: new URL(url).host, list };
         store.setCache('comets', cached);

@@ -6,7 +6,7 @@
   --accent: #5cc8ff; --accent2: #a58bff; --good: #62f0a5; --warn: #ffb454; --bad: #ff7a7a;
   --moon: #e9e4d2; --moondark: #151c2b;
   --radius: 18px;
-  --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 }
 
 html.night {
@@ -32,9 +32,8 @@ html.night #app { background: radial-gradient(120% 60% at 50% -10%, #2a050555, t
 
 #top { display: flex; align-items: center; justify-content: space-between; padding: calc(var(--safe-t) + 12px) 18px 8px; }
 .brand { display: flex; align-items: center; gap: 12px; }
-.logo { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 18px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #04070d; }
-html.night .logo { color: #120000; }
+.logo { width: 34px; height: 34px; border-radius: 9px; display: block; }
+html.night .logo { filter: grayscale(1) sepia(1) hue-rotate(-50deg) saturate(4) brightness(.8); }
 h1 { margin: 0; font-size: 17px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; }
 #subtitle { font-size: 12px; color: var(--dim); }
 #btn-settings { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--dim); }
@@ -332,3 +331,13 @@ body[data-view="point"] #fab, body[data-view="sky"] #fab, body.no-fab #fab, body
 .sp-center { position: absolute; left: 10px; top: 76px; }
 .set-row.col { flex-direction: column; align-items: stretch; gap: 8px; }
 .set-row .txt { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 13px; }
+
+/* Settings → Notifications */
+.set-link { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; }
+.set-link .chev { font-size: 22px; color: var(--dim); }
+.nrow .nic { width: 26px; text-align: center; font-size: 18px; flex: none; }
+.nrow select { font-size: 13px; padding: 6px 8px; max-width: 118px; }
+.nrow.off .grow, .nrow.off select { opacity: .45; }
+.nrow label.grow { cursor: pointer; }
+.swl { display: flex; flex: none; cursor: pointer; }
+.swl input { display: none; }

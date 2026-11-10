@@ -1,0 +1,17 @@
+{
+  "appId": "io.github.mrsnilloc.upsight",
+  "appName": "UpSight",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#05070c"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "SystemBars": {
+      "style": "DARK",
+      "insetsHandling": "css"
+    }
+  }
+}

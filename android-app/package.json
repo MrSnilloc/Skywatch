@@ -1,0 +1,14 @@
+{
+  "name": "skywatch-android",
+  "version": "0.19.0",
+  "private": true,
+  "description": "Sky Watch as an installable Android app (Capacitor wrapper around the web app in the folder above).",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}

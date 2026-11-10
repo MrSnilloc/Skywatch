@@ -1,6 +1,6 @@
 {
-  "name": "Sky Watch",
-  "short_name": "Sky Watch",
+  "name": "UpSight",
+  "short_name": "UpSight",
   "description": "ISS passes, planets and the Moon — with a finder that points you at them.",
   "start_url": "./",
   "scope": "./",

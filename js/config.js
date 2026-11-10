@@ -1,9 +1,9 @@
-// config.js — every tunable value for Sky Watch lives here.
+// config.js — every tunable value for UpSight lives here.
 // Change a number here and the whole app follows; nothing is hard-coded elsewhere.
 
 export const CONFIG = {
-  appName: 'Sky Watch',
-  version: '0.3.0',
+  appName: 'UpSight',
+  version: '0.19.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -16,7 +16,6 @@ export const CONFIG = {
     azOffset: 0,             // extra compass trim set by "Calibrate" on the Point screen
     hour12: true,
     nightMode: false,        // red night-vision theme
-    relayUrl: '',            // your Cloudflare relay, e.g. https://skywatch-relay.yourname.workers.dev
     showFab: true,           // floating "What's this?" camera button
     planeAlerts: true,       // Look Up shows planes about to pass overhead
     minPeakEl: 10,           // hide ISS passes that never climb above this many degrees
@@ -72,7 +71,6 @@ export const CONFIG = {
     // Orbit elements for every known comet. Minor Planet Center first, NASA/JPL as backup. Cached for a day.
     urls: [
       'https://www.minorplanetcenter.net/iau/MPCORB/CometEls.txt',
-      'relay:comets',
       'https://ssd-api.jpl.nasa.gov/sbdb_query.api?fields=full_name,q,e,i,om,w,tp,M1,K1&sb-kind=c&sb-cdata=' + encodeURIComponent('{"AND":["M1|DF"]}'),
     ],
     cacheHours: 24,
@@ -83,10 +81,9 @@ export const CONFIG = {
 
   planes: {
     // Free live aircraft feeds (ADS-B), tried in order. {lat} {lon} {nm} are filled in.
-    // Web browsers block these feeds for web apps, so a web install goes through YOUR relay first
-    // (relay/skywatch-relay.js on Cloudflare; its address goes in Settings). The Android app can use them directly.
+    // Web browsers block these feeds for web apps (no CORS), so live planes need the Android app,
+    // which fetches natively. The web version shows a note instead.
     sources: [
-      'relay',
       'https://api.adsb.lol/v2/point/{lat}/{lon}/{nm}',
       'https://api.airplanes.live/v2/point/{lat}/{lon}/{nm}',
       'opensky',
@@ -138,4 +135,40 @@ export const CONFIG = {
     lockDeg: 3,              // "on target" when within this many degrees
     smoothing: 0.22,         // 0..1 — higher = snappier, lower = steadier compass
   },
+
+  notify: {
+    // Phone notifications (Android app). Each type gets its own switch in Settings → Notifications and its own
+    // Android channel, so it can also be silenced from the phone's settings.
+    // TO ADD A TYPE: add an entry here, then teach notify.js how to find its moments (see BUILDERS there).
+    types: [
+      { id: 'iss', group: 'Passes', icon: '🛰', label: 'ISS', hint: 'Visible passes only', on: true, leads: [5, 10, 30], lead: 10 },
+      { id: 'css', group: 'Passes', icon: '🛰', label: 'Tiangong', hint: 'Chinese space station', on: true, leads: [5, 10, 30], lead: 10 },
+      { id: 'hst', group: 'Passes', icon: '🔭', label: 'Hubble', hint: 'Visible passes', on: false, leads: [5, 10, 30], lead: 10 },
+      { id: 'starlink', group: 'Passes', icon: '⋯', label: 'Starlink trains', hint: 'Fresh launches only', on: true, leads: [5, 10, 30], lead: 10 },
+      { id: 'eclipse', group: 'Events', icon: '🌘', label: 'Eclipses', hint: 'Day before + when it starts', on: true, quietOk: true },
+      { id: 'moon', group: 'Events', icon: '🌕', label: 'Special moons', hint: 'Super, blue, harvest — at moonrise', on: true },
+      { id: 'shower', group: 'Events', icon: '☄', label: 'Meteor shower peaks', hint: 'Evening of the peak night', on: true },
+      { id: 'launch', group: 'Events', icon: '🚀', label: 'Launches you could see', hint: '30 min before + liftoff', on: false },
+      { id: 'comet', group: 'Events', icon: '☄', label: 'Bright comets', hint: 'When one is bright enough to see', on: true },
+      { id: 'daily', group: 'Daily and live', icon: '👁', label: 'Tonight’s sky summary', hint: 'Only when it looks clear', on: true,
+        times: [['sunset', 'Sunset'], [18, '6 PM'], [20, '8 PM']], time: 18 },
+      { id: 'planes', group: 'Daily and live', icon: '✈', label: 'Planes overhead', hint: 'Only while the app is open', on: false },
+    ],
+    quiet: { on: true, from: 22, to: 7 },   // no alerts in this window (types marked quietOk still come through)
+    passDays: 7,             // schedule passes this far ahead
+    eventDays: 45,           // ...and events this far ahead
+    dailyDays: 3,            // daily summaries (the cloud forecast only reaches ~3 days)
+    dayBeforeHour: 19,       // "tomorrow: eclipse" reminder time (7 PM the day before)
+    showerHour: 21,          // meteor-shower reminder time on the peak evening
+    cloudyPct: 70,           // skip the daily summary when the evening looks cloudier than this
+    maxScheduled: 60,        // Android keeps a limited number of alarms per app — stay well under it
+  },
 };
+
+// One on/off setting (and lead time / time of day where offered) per notification type, plus quiet hours.
+for (const t of CONFIG.notify.types) {
+  CONFIG.defaults['n_' + t.id] = t.on;
+  if (t.leads) CONFIG.defaults['n_' + t.id + '_lead'] = t.lead;
+  if (t.times) CONFIG.defaults['n_' + t.id + '_time'] = t.time;
+}
+Object.assign(CONFIG.defaults, { quietOn: CONFIG.notify.quiet.on, quietFrom: CONFIG.notify.quiet.from, quietTo: CONFIG.notify.quiet.to });

@@ -1,14 +1,14 @@
-// sw.js — service worker: keeps the app files on the phone so Sky Watch opens offline.
+// sw.js — service worker: keeps the app files on the phone so UpSight opens offline.
 // Orbit data is NOT cached here (the app saves its own copy), and other websites are never touched.
 // When you change any app file, bump CACHE so phones pick up the new version.
 
-const CACHE = 'skywatch-v17';
+const CACHE = 'upsight-v19';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'lib/astronomy.browser.min.js', 'lib/satellite.min.js', 'lib/geomagnetism.min.js',
   'js/main.js', 'js/config.js', 'js/store.js', 'js/bus.js', 'js/time.js', 'js/ui.js',
-  'js/sky.js', 'js/magnetic.js', 'js/showers.js', 'js/geo.js', 'js/iss.js', 'js/issService.js', 'js/ics.js', 'js/compass.js', 'js/targets.js', 'js/skymath.js', 'js/skydata.js', 'js/satellites.js', 'js/events.js', 'js/outlook.js', 'js/launches.js', 'js/comets.js', 'js/planes.js', 'js/ufo.js', 'js/colors.js', 'data/land.json', 'js/weather.js', 'data/sky.json',
-  'js/views/index.js', 'js/views/skymap.js', 'js/views/events.js', 'js/views/space.js', 'js/views/planes.js', 'js/views/tonight.js', 'js/views/iss.js', 'js/views/showers.js', 'js/views/point.js', 'js/views/settings.js',
+  'js/sky.js', 'js/magnetic.js', 'js/showers.js', 'js/geo.js', 'js/iss.js', 'js/issService.js', 'js/ics.js', 'js/compass.js', 'js/targets.js', 'js/skymath.js', 'js/skydata.js', 'js/satellites.js', 'js/events.js', 'js/outlook.js', 'js/launches.js', 'js/comets.js', 'js/planes.js', 'js/ufo.js', 'js/platform.js', 'js/colors.js', 'js/notify.js', 'data/land.json', 'js/weather.js', 'data/sky.json',
+  'js/views/index.js', 'js/views/skymap.js', 'js/views/events.js', 'js/views/space.js', 'js/views/planes.js', 'js/views/tonight.js', 'js/views/iss.js', 'js/views/showers.js', 'js/views/point.js', 'js/views/settings.js', 'js/views/notifySettings.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 
