@@ -5,7 +5,7 @@
 import { loadPlanes, planeLook, kmToMi, ktToMph, altColor, closestApproach } from '../planes.js';
 import { dirName } from '../sky.js';
 import { createOrientation } from '../compass.js';
-import { currentDeclination } from '../magnetic.js';
+import { compassCorrection } from '../calibration.js';
 import { store } from '../store.js';
 import { col, isNight } from '../colors.js';
 import { esc } from '../ui.js';
@@ -292,7 +292,7 @@ const mapCenterNow = () => mapCenter();
 
 function startCompass() {
   if (orient) return;
-  orient = createOrientation({ smoothing: 0.25, getCorrection: () => currentDeclination(ctx.location()) + store.get('azOffset') });
+  orient = createOrientation({ smoothing: 0.25, getCorrection: () => compassCorrection(ctx.location()) });
   orient.start().catch(() => {});
 }
 

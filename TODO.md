@@ -28,6 +28,17 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 - [ ] **4. BUG: ISS missing from Sky map** — the ISS didn't show on the Sky map during a real pass
   (Nov 10, 2026). Check layer defaults, sunlit/dark filters and orbit-data age. Find the cause before
   changing anything.
+  - *Investigated 2026-11-11, nothing changed yet. Replaying the Nov 10 5:52 PM pass (default location, fresh
+    orbit data, default layers) DOES draw the ISS, so layer defaults, the sunlit/dark filter and orbit-data age
+    are all ruled out as code bugs. Not confirmed on the phone: a saved "Satellites" layer switched off, or the
+    time scrubber left off "Now". Most likely cause: in Live mode the portrait view is only ~15° wide each side,
+    so a compass error beyond that puts the ISS off-screen, and there is no off-screen cue unless "Guide me" is
+    on; the marker is also a small 6 px diamond that looks like every other satellite. Magnetic declination
+    (−8.7°) is already applied once, with the right sign (relevant to #11).*
+  - *Fix BUILT 2026-11-11 in v0.21 (`js/views/skymap.js`, `config.sats.highlight`): "ISS pass now" banner (tap
+    to be guided), blue edge arrow when the ISS is off-screen during a visible pass, bigger ISS marker. Checked
+    in a browser replay of the Nov 10 pass. Waiting for the owner's phone test during a real pass — tick the
+    box once they say OK.*
 
 - [ ] **5. "WHAT'S THIS?" REWORK** — it said "Unidentified" while aimed at the ISS. Use a wider search radius to
   allow for compass error. Rank results by brightness, movement and passes happening right now. At night,
@@ -69,6 +80,24 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
     and a Reset button. Save the offset on the phone.
   - If the offset is over ~30°, don't save it; say "Move away from metal or a magnetic case and try again."
   - Sun safety note: don't look straight at the Sun; line up using the phone's shadow or the screen.
+  - *BUILT 2026-11-11 in v0.22 (`js/calibration.js`, `js/views/calibrate.js`, limits in `config.compass`).
+    Checked first: the app already applied magnetic declination once (correct sign), so the saved offset is
+    only the error left over on top of that — nothing is applied twice. All screens (Sky map, "What's this?",
+    Point, plane map) now read one shared `compassCorrection()`. Tested with simulated sensors in a browser.
+    Waiting for the owner's phone test — tick the box once they say OK.*
+
+## Status note, 2026-11-11 (session stopped at the usage limit)
+- **#5 BUILT in v0.23** (`js/identify.js`, night crosshair view in `skymap.js`). Browser-tested; needs phone test.
+- **#8 and #9 BUILT in v0.24** but only partly checked (`js/moons.js`, `js/moonmap.js`, `js/views/spacePlanet.js`,
+  `js/views/spaceMoon.js`, shared speed bar in `space.js`). Seen working in a browser: Jupiter/Saturn close-ups,
+  "Show moons", binoculars view, Moon close-up with names and Apollo flags, shared speeds.
+  NOT yet checked: Earth tab orbit lines at high speed, rewind, Mercury/Venus/Mars/Uranus/Neptune close-ups,
+  drag-to-spin on a real touch screen, red night mode, moon shadows on Jupiter during a real shadow transit.
+  Known rough edges: the top bar wraps ("Solar system" on two lines) when the date text is long; long captions
+  overlap the top of the picture when zoomed in; Moon craters look blocky near the lit edge.
+- Moon positions for Mars/Saturn/Uranus/Neptune were fitted from NASA JPL Horizons (public domain, used once at
+  build time, not by the app). Add JPL to the credits screen.
+- None of #4, #5, #8, #9, #11 is ticked: all wait for the owner's phone test.
 
 ## ON HOLD (don't build — just kept here)
 - 3D spacecraft models (NASA 3D Resources — check license terms).

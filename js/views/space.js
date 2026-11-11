@@ -1,8 +1,12 @@
 // views/space.js — "Space": eye-candy views of where everything really is, animated in real time (or faster).
-//   Earth   : 3D globe with day/night, coastlines and the satellites you can see from the ground (ISS, Tiangong,
-//             Hubble, Starlink trains and the brightest ~150) on their real orbits. Drag to spin, pinch to zoom.
-//   Moon    : the Earth–Moon system seen from above, with the Sun's direction and Earth's shadow.
-//   Planets : the solar system from above (distances squeezed so Neptune fits on a phone).
+//   Earth        : 3D globe with day/night, coastlines and the satellites you can see from the ground (ISS, Tiangong,
+//                  Hubble, Starlink trains and the brightest ~150) on their real orbits. Drag to spin, pinch to zoom.
+//   Moon         : "Orbit" = the Earth–Moon system seen from above; "Close-up" = a Moon you can spin (spaceMoon.js).
+//   Solar system : all the planets from above, or pick one planet for a close-up with its moons (spacePlanet.js).
+// One shared speed control (Live, 1 min/s, 1 hr/s, 1 day/s, and rewind) drives every view.
+//
+// TO ADD A VIEW: write a file that exports draw(k, state, date) like spacePlanet.js, add it to viewKey() / the
+// draw switch in frame(), and give it chips in controls().
 
 import { col, mix, isNight } from '../colors.js';
 import { icons, esc } from '../ui.js';
@@ -12,16 +16,15 @@ import { fmtTime, fmtDay } from '../time.js';
 import { loadComets, interestingComets, helioEcl, jd, cometAt } from '../comets.js';
 import { eventData } from '../events.js';
 import { toast } from '../ui.js';
+import { drawPlanet, fitZoom } from './spacePlanet.js';
+import { drawMoonFace } from './spaceMoon.js';
+import { PLANETS as PLANET_DATA, PLANET_NAMES, bestTonight } from '../moons.js';
 
 const A = () => globalThis.Astronomy;
 const SAT = () => globalThis.satellite;
 const RAD = Math.PI / 180, DEG = 180 / Math.PI, AU = 149597870.7, RE = 6371;
 
-const SCENES = {
-  earth: { label: 'Earth', speeds: [[1, 'Live'], [60, '1 min/s'], [600, '10 min/s'], [3600, '1 hr/s']] },
-  moon: { label: 'Moon', speeds: [[1, 'Live'], [3600, '1 hr/s'], [21600, '6 hr/s'], [86400, '1 day/s']] },
-  solar: { label: 'Planets', speeds: [[1, 'Live'], [86400, '1 day/s'], [604800, '1 wk/s'], [2592000, '1 mo/s']] },
-};
+const SCENES = { earth: { label: 'Earth' }, moon: { label: 'Moon' }, solar: { label: 'Solar system' } };
 const PLANETS = [
   ['Mercury', 87.97, 3, '#b9b2a8'], ['Venus', 224.7, 4.5, '#fff0c4'], ['Earth', 365.26, 4.6, '#5cb4ff'], ['Mars', 686.98, 3.6, '#ff7b5c'],
   ['Jupiter', 4332.6, 8.5, '#ffd9a0'], ['Saturn', 10759, 7.5, '#e8d49a'], ['Uranus', 30687, 5.5, '#9fe8f0'], ['Neptune', 60190, 5.5, '#7aa5ff'],
@@ -29,7 +32,12 @@ const PLANETS = [
 const FEATURED = { iss: '#5cc8ff', css: '#ffb454', hst: '#c49bff' };
 
 // state kept between visits
-const S = { scene: 'earth', speedIdx: { earth: 0, moon: 1, solar: 2 }, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] } };
+const S = { scene: 'earth', speedIdx: 0, dir: 1, hold: false, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] },
+  planet: { name: null, zoom: 1, pan: [0, 0], bino: false, binoNote: '', caption: '' },      // Solar system → one planet
+  face: { on: false, zoom: 1, yaw: 0, pitch: 0, names: true, dragging: false, caption: '', tip: '', turned: false } };   // Moon → close-up
+
+/** Which drawing is showing: 'earth' | 'moon' | 'face' | 'solar' | 'planet'. */
+const viewKey = () => (S.scene === 'moon' && S.face.on ? 'face' : S.scene === 'solar' && S.planet.name ? 'planet' : S.scene);
 
 let ctx, root, cv, g, W = 1, H = 1, dpr = 1, raf = 0, mounted = false, last = 0;
 let land = null, sats = [], hits = [], stars = [], shade = null, shadeG = null;
@@ -243,6 +251,21 @@ function drawEarth(date) {
   const hidden = (v, p) => p[2] < 0 && (dot(v, cam.right) ** 2 + dot(v, cam.up) ** 2) < 1;
   const lit = (v) => { const s = dot(v, sun); return s > 0 || (dot(v, v) - s * s) > 1; };
   const selId = S.sel && S.sel.id;
+  // Sped up, satellites would just be a blur of dots: show each one's orbit as a line instead.
+  const fast = Math.abs(speed()) >= ctx.config.space.orbitLinesSpeed;
+  if (fast) {
+    for (const s of sats) {
+      if (s.kind !== 'other') continue;
+      if (!s.orbit || Math.abs(s.orbit.at - date.getTime()) > 3 * 3600e3) {       // orbits drift slowly: redo every 3 hours of app time
+        const per = 2 * Math.PI / s.satrec.no * 60000, pts = [];
+        for (let q = 0; q <= 40; q++) { const pv = SAT().propagate(s.satrec, new Date(date.getTime() + per * q / 40)); if (pv && pv.position) pts.push([pv.position.x / RE, pv.position.y / RE, pv.position.z / RE]); }
+        s.orbit = { at: date.getTime(), pts };
+      }
+      g.beginPath(); let pen = false;
+      for (const v of s.orbit.pts) { const p = P(v); if (hidden(v, p)) { pen = false; continue; } pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true; }
+      g.strokeStyle = col(s.color); g.globalAlpha = 0.16; g.lineWidth = 0.8; g.stroke(); g.globalAlpha = 1;
+    }
+  }
   for (const s of sats) {
     const isSel = selId === 'sat:' + s.norad;
     if (s.kind === 'other' && !isSel) continue;
@@ -255,9 +278,17 @@ function drawEarth(date) {
       if (hidden(v, p)) { pen = false; continue; }
       pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true;
     }
-    g.strokeStyle = col(isSel ? '#ffffff' : s.color); g.globalAlpha = isSel ? 0.9 : 0.4; g.lineWidth = isSel ? 2 : 1.2; g.stroke(); g.globalAlpha = 1;
+    g.strokeStyle = col(isSel ? '#ffffff' : s.color); g.globalAlpha = isSel ? 0.9 : fast ? 0.75 : 0.4; g.lineWidth = isSel ? 2 : fast ? 1.6 : 1.2; g.stroke(); g.globalAlpha = 1;
+    if (fast && s.kind !== 'other') {                 // name the line at its northernmost point (steady, unlike the racing dot)
+      const pv = SAT().propagate(s.satrec, date);
+      if (pv && pv.position) {
+        const r = Math.hypot(pv.position.x, pv.position.y, pv.position.z) / RE, nrm = norm(cross([pv.position.x, pv.position.y, pv.position.z], [pv.velocity.x, pv.velocity.y, pv.velocity.z]));
+        const top = norm([-nrm[0] * nrm[2], -nrm[1] * nrm[2], 1 - nrm[2] * nrm[2]]).map(c => c * r), p = P(top);
+        if (!hidden(top, p)) label(s.name, p[0] + 6, p[1] - 5, s.color);
+      }
+    }
   }
-  for (const s of sats) {
+  for (const s of fast ? [] : sats) {
     const pv = SAT().propagate(s.satrec, date);
     if (!pv || !pv.position) continue;
     const v = [pv.position.x / RE, pv.position.y / RE, pv.position.z / RE], p = P(v);
@@ -480,8 +511,13 @@ function drawSolar(date) {
 }
 
 // ---------- frame / time ----------
-const speed = () => SCENES[S.scene].speeds[S.speedIdx[S.scene]][0];
-const isLive = () => speed() === 1 && Math.abs(S.simMs - Date.now()) < 3000;
+const SPEEDS = () => ctx.config.space.speeds;
+const speed = () => (S.hold ? 0 : SPEEDS()[S.speedIdx][0] * (S.speedIdx === 0 ? 1 : S.dir));    // app-seconds per real second
+const liveMode = () => S.speedIdx === 0 && !S.hold;
+const isLive = () => liveMode() && Math.abs(S.simMs - Date.now()) < 3000;
+function goLive() { S.speedIdx = 0; S.dir = 1; S.hold = false; S.simMs = Date.now(); }
+/** Freeze the clock at a moment (used by "tonight" views). Tapping any speed starts it again. */
+function holdAt(date) { S.simMs = date.getTime(); S.hold = true; }
 const simDate = () => new Date(S.simMs);
 
 function frame(ts) {
@@ -493,13 +529,16 @@ function frame(ts) {
   const date = simDate();
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   background(); hits = [];
-  if (S.scene === 'earth') drawEarth(date); else if (S.scene === 'moon') drawMoonScene(date); else drawSolar(date);
+  const key = viewKey(), k = { g, W, H, col, label, edgeMarker, hits, night: isNight(), ctx };
+  if (key === 'earth') drawEarth(date); else if (key === 'moon') drawMoonScene(date); else if (key === 'face') drawMoonFace(k, S.face, date);
+  else if (key === 'planet') drawPlanet(k, S.planet, date); else drawSolar(date);
+  if (key === 'face' || key === 'planet') setHint();
   if (S.sel && !S.sel.id.startsWith('sat:')) {
     const h = hits.find(x => x.id === S.sel.id);
     if (h) { g.strokeStyle = col('#ffffff'); g.lineWidth = 1.6; g.beginPath(); g.arc(h.x, h.y, 14 + 2 * Math.sin(performance.now() / 260), 0, 2 * Math.PI); g.stroke(); }
   }
   const t = root.querySelector('#sp-time');
-  const txt = isLive() ? 'Live · ' + fmtTime(date) : `${fmtDay(date)}${date.getFullYear() !== new Date().getFullYear() ? ', ' + date.getFullYear() : ''} · ${fmtTime(date)}`;
+  const txt = isLive() ? 'Live · ' + fmtTime(date) : `${S.hold ? 'Paused · ' : ''}${fmtDay(date)}${date.getFullYear() !== new Date().getFullYear() ? ', ' + date.getFullYear() : ''} · ${fmtTime(date)}`;
   if (t.dataset.t !== txt) { t.textContent = txt; t.dataset.t = txt; }
   if (S.sel) {
     const box = root.querySelector('#sp-info');
@@ -507,17 +546,41 @@ function frame(ts) {
   }
 }
 
+function setHint() {
+  const key = viewKey();
+  const txt = key === 'earth' ? `${sats.length ? sats.length + ' satellites · ' : ''}${Math.abs(speed()) >= ctx.config.space.orbitLinesSpeed ? 'sped up: satellites shown as orbit lines' : 'drag to spin · pinch to zoom · tap to identify'}`
+    : key === 'face' ? `${S.face.caption}\n${S.face.tip}`
+    : key === 'planet' ? S.planet.caption
+    : 'View from above · drag to move · pinch to zoom';
+  const el = root.querySelector('#sp-hint');
+  if (el.dataset.t !== txt) { el.textContent = txt; el.dataset.t = txt; }
+}
+
 function controls() {
-  const sc = SCENES[S.scene];
+  const key = viewKey(), chip = (a, text, on = false, extra = '') => `<button class="chip ${on ? 'on' : ''}" data-a="${a}" ${extra}>${text}</button>`;
   root.querySelector('#sp-scenes').innerHTML = Object.entries(SCENES).map(([k, v]) => `<button data-scene="${k}" class="${k === S.scene ? 'on' : ''}">${v.label}</button>`).join('');
-  root.querySelector('#sp-speed').innerHTML = sc.speeds.map(([, l], i) => `<button data-speed="${i}" class="${i === S.speedIdx[S.scene] ? 'on' : ''}">${l}</button>`).join('') + '<button data-a="now">Now</button>';
-  const z = root.querySelector('.sp-zoom');
-  z.classList.toggle('hidden', S.scene !== 'solar');
-  z.textContent = S.zoom.solar > 2 ? 'All planets' : 'Inner planets';
-  root.querySelector('.sp-ecl').classList.toggle('hidden', S.scene === 'solar');
-  const pn = S.pan[S.scene];
-  root.querySelector('.sp-center').classList.toggle('hidden', !pn || Math.hypot(pn[0], pn[1]) < 20);
-  root.querySelector('#sp-hint').textContent = S.scene === 'earth' ? `${sats.length ? sats.length + ' satellites · ' : ''}drag to spin · pinch to zoom · tap to identify` : S.scene === 'moon' ? 'View from above · drag to move · pinch to zoom' : 'View from above · drag to move · pinch to zoom';
+  // the shared speed bar
+  root.querySelector('#sp-speed').innerHTML = `<button data-a="rewind" class="${S.dir < 0 && !liveMode() ? 'on' : ''}" aria-label="Rewind">◀◀</button>` +
+    SPEEDS().map(([, l], i) => `<button data-speed="${i}" class="${i === S.speedIdx && !S.hold ? 'on' : ''}">${l}</button>`).join('');
+  // picker row: which planet / which Moon view
+  root.querySelector('#sp-pick').innerHTML = S.scene === 'solar'
+    ? chip('planet', 'All', !S.planet.name, 'data-p=""') + PLANET_NAMES.map(n => chip('planet', n, S.planet.name === n, `data-p="${n}"`)).join('')
+    : S.scene === 'moon' ? chip('face', 'Orbit', !S.face.on, 'data-v="0"') + chip('face', 'Close-up', S.face.on, 'data-v="1"') : '';
+  // action row
+  const acts = [], pn = key === 'planet' ? S.planet.pan : S.pan[key];
+  if (key === 'earth' || key === 'moon') acts.push(chip('eclipse', 'Next eclipse ›'));
+  if (key === 'solar') acts.push(chip('inner', S.zoom.solar > 2 ? 'All planets' : 'Inner planets'));
+  if (key === 'planet') {
+    if (PLANET_DATA[S.planet.name].moons.length && !S.planet.bino) acts.push(chip('pfit', S.planet.zoom < 0.7 ? 'Close-up' : 'Show moons'));
+    acts.push(chip('bino', 'Through binoculars tonight', S.planet.bino));
+  }
+  if (key === 'face') {
+    acts.push(chip('mtonight', 'Tonight’s view'), chip('names', S.face.names ? 'Names on' : 'Names off', S.face.names));
+    if (S.face.turned) acts.push(chip('mreset', 'Face Earth'));
+  }
+  if (pn && Math.hypot(pn[0], pn[1]) >= 20) acts.push(chip('recenter', '◎ Centre'));
+  root.querySelector('#sp-acts').innerHTML = acts.join('');
+  setHint();
 }
 
 function showInfo() {
@@ -528,7 +591,7 @@ function showInfo() {
   const inf = h ? h.info() : S.sel.last;
   if (!inf) { box.classList.add('hidden'); return; }
   S.sel.last = inf;
-  const hiddenNote = h ? '' : '<div class="sub" style="margin-top:3px;color:var(--warn)">Behind Earth right now — it’ll come back around</div>';
+  const hiddenNote = h ? '' : '<div class="sub" style="margin-top:3px;color:var(--warn)">Out of view right now — it’ll come back around</div>';
   box.innerHTML = `<div class="si-head"><div class="big">${esc(inf.title)}</div><button class="x" data-back data-a="close">✕</button></div>${inf.lines.map(l => `<div class="sub" style="margin-top:3px">${esc(l)}</div>`).join('')}${hiddenNote}
     ${inf.follow ? `<div class="actions"><button class="btn small ${S.follow ? '' : 'ghost'}" data-a="follow">${S.follow ? 'Following ✓' : 'Follow it'}</button></div>` : ''}`;
   box.classList.remove('hidden');
@@ -541,7 +604,7 @@ function jumpToEclipse() {
   const e = list.find(x => x.peak.getTime() > S.simMs + 55 * 60e3) || list[0];
   const date = e.peak;
   S.simMs = date.getTime() - 50 * 60e3;              // arrive a little early and watch it happen
-  S.speedIdx[S.scene] = 1;
+  S.speedIdx = 1; S.dir = 1; S.hold = false;
   if (S.scene === 'earth') {
     const sv = A().GeoVector('Sun', date, true), sun = norm([sv.x, sv.y, sv.z]);
     const side = norm(cross(sun, [0, 0, 1]));
@@ -559,23 +622,52 @@ function pickAt(x, y) {
   showInfo();
 }
 
+/** "Through binoculars tonight" / "Tonight's view": jump to a good moment tonight and freeze there. */
+function jumpTonight(body) {
+  const bt = bestTonight(body, ctx.location(), new Date());
+  if (!bt) { goLive(); return `${body === 'Moon' ? 'The Moon' : body} isn’t up after dark tonight — showing it as it is right now`; }
+  if (bt.now) { goLive(); return 'It’s up right now — this is live'; }
+  holdAt(bt.date);
+  return `Best tonight around ${fmtTime(bt.date)}, when it’s highest in the dark`;
+}
+
 function onClick(e) {
   const b = e.target.closest('[data-scene],[data-speed],[data-a]'); if (!b) return;
-  if (b.dataset.scene) { S.scene = b.dataset.scene; S.sel = null; showInfo(); if (speed() === 1) S.simMs = Date.now(); }
-  else if (b.dataset.speed) { S.speedIdx[S.scene] = +b.dataset.speed; if (speed() === 1) S.simMs = Date.now(); }
-  else if (b.dataset.a === 'now') { S.simMs = Date.now(); }
-  else if (b.dataset.a === 'eclipse') { jumpToEclipse(); }
-  else if (b.dataset.a === 'inner') { S.zoom.solar = S.zoom.solar > 2 ? 1 : 3.4; S.pan.solar = [0, 0]; }
-  else if (b.dataset.a === 'recenter') { if (S.pan[S.scene]) S.pan[S.scene] = [0, 0]; }
-  else if (b.dataset.a === 'close') { S.sel = null; showInfo(); }
-  else if (b.dataset.a === 'follow') { S.follow = !S.follow; showInfo(); }
+  const a = b.dataset.a;
+  if (b.dataset.scene) { S.scene = b.dataset.scene; S.sel = null; showInfo(); if (liveMode()) S.simMs = Date.now(); }
+  else if (b.dataset.speed) { S.speedIdx = +b.dataset.speed; S.hold = false; if (S.speedIdx === 0) goLive(); }
+  else if (a === 'rewind') { if (liveMode()) { S.speedIdx = 1; S.dir = -1; } else { S.dir = -S.dir; S.hold = false; } }
+  else if (a === 'eclipse') { jumpToEclipse(); }
+  else if (a === 'inner') { S.zoom.solar = S.zoom.solar > 2 ? 1 : 3.4; S.pan.solar = [0, 0]; }
+  else if (a === 'recenter') { if (viewKey() === 'planet') S.planet.pan = [0, 0]; else if (S.pan[S.scene]) S.pan[S.scene] = [0, 0]; }
+  else if (a === 'close') { S.sel = null; showInfo(); }
+  else if (a === 'follow') { S.follow = !S.follow; showInfo(); }
+  else if (a === 'planet') {
+    const was = S.planet.bino;
+    Object.assign(S.planet, { name: b.dataset.p || null, zoom: 1, pan: [0, 0], bino: false, binoNote: '' });
+    S.sel = null; showInfo(); if (was) goLive();
+  }
+  else if (a === 'pfit') { S.planet.zoom = S.planet.zoom < 0.7 ? 1 : fitZoom(S.planet.name, W, H); S.planet.pan = [0, 0]; }
+  else if (a === 'bino') {
+    S.planet.bino = !S.planet.bino; S.sel = null; showInfo();
+    if (S.planet.bino) S.planet.binoNote = jumpTonight(S.planet.name); else goLive();
+  }
+  else if (a === 'face') { S.face.on = b.dataset.v === '1'; S.sel = null; showInfo(); }
+  else if (a === 'mtonight') { S.face.yaw = 0; S.face.pitch = 0; S.face.turned = false; toast(jumpTonight('Moon')); }
+  else if (a === 'mreset') { S.face.yaw = 0; S.face.pitch = 0; S.face.turned = false; }
+  else if (a === 'names') { S.face.names = !S.face.names; }
   controls();
 }
 
+const zoomOf = () => { const k = viewKey(); return k === 'planet' ? S.planet.zoom : k === 'face' ? S.face.zoom : S.zoom[k]; };
 function setZoom(z) {
-  const max = S.scene === 'solar' ? 12 : 6, nz = Math.max(0.5, Math.min(max, z)), k = nz / S.zoom[S.scene];
-  if (S.pan[S.scene]) S.pan[S.scene] = S.pan[S.scene].map(v => v * k);   // zoom around the middle of the screen
-  S.zoom[S.scene] = nz;
+  const key = viewKey();
+  const [min, max] = key === 'planet' ? [0.02, 14] : key === 'face' ? [0.6, 6] : key === 'solar' ? [0.5, 12] : [0.5, 6];
+  const nz = Math.max(min, Math.min(max, z)), kf = nz / zoomOf();
+  if (key === 'planet') { S.planet.pan = S.planet.pan.map(v => v * kf); S.planet.zoom = nz; controls(); return; }   // zoom around the middle of the screen
+  if (key === 'face') { S.face.zoom = nz; return; }
+  if (S.pan[key]) S.pan[key] = S.pan[key].map(v => v * kf);
+  S.zoom[key] = nz;
 }
 
 function bindPointer() {
@@ -590,22 +682,28 @@ function bindPointer() {
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (lastDist) setZoom(S.zoom[S.scene] * d / lastDist);
+      if (lastDist) setZoom(zoomOf() * d / lastDist);
       lastDist = d; if (start) start.moved = true;
     } else if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
       start.moved = true;
-      if (S.scene === 'earth') { S.follow = false; S.yaw -= dx * 0.006; S.pitch = Math.max(-1.45, Math.min(1.45, S.pitch + dy * 0.006)); }
-      else { const p = S.pan[S.scene]; p[0] += dx; p[1] += dy; controls(); }
+      const key = viewKey();
+      if (key === 'earth') { S.follow = false; S.yaw -= dx * 0.006; S.pitch = Math.max(-1.45, Math.min(1.45, S.pitch + dy * 0.006)); }
+      else if (key === 'face') {                       // spin the Moon: the surface follows your finger
+        const kf = 0.9 / (Math.min(W, H) * 0.4 * S.face.zoom);
+        S.face.yaw -= dx * kf; S.face.pitch = Math.max(-1.5, Math.min(1.5, S.face.pitch + dy * kf));
+        if (!S.face.dragging) { S.face.dragging = true; } if (!S.face.turned) { S.face.turned = true; controls(); }
+      }
+      else { const p = key === 'planet' ? S.planet.pan : S.pan[key]; p[0] += dx; p[1] += dy; controls(); }
     }
   });
   cv.addEventListener('pointerup', (e) => {
     if (pointers.size === 1 && start && !start.moved) {
       const r = cv.getBoundingClientRect(); pickAt(e.clientX - r.left, e.clientY - r.top);
     }
-    pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null;
+    pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null; S.face.dragging = false;
   });
-  cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; });
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(S.zoom[S.scene] * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
+  cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; S.face.dragging = false; });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(zoomOf() * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
 }
 
 export const spaceView = {
@@ -616,10 +714,7 @@ export const spaceView = {
     el.innerHTML = `<div class="sky-wrap sp-wrap">
       <canvas id="sp-cv"></canvas>
       <div class="sky-top"><div class="seg" id="sp-scenes"></div><div id="sp-time" class="sp-time"></div></div>
-      <button class="chip sp-zoom hidden" data-a="inner">Inner planets</button>
-      <button class="chip sp-ecl hidden" data-a="eclipse">Next eclipse ›</button>
-      <button class="chip sp-center hidden" data-a="recenter" aria-label="Re-centre">◎ Centre</button>
-      <div id="sp-hint" class="sky-hud"></div>
+      <div class="sp-bar"><div class="chips" id="sp-pick"></div><div class="sp-acts" id="sp-acts"></div><div id="sp-hint" class="sp-hint"></div></div>
       <div id="sp-info" class="sky-info hidden"></div>
       <div class="sky-time" id="sp-speed"></div>
     </div>`;
@@ -627,7 +722,7 @@ export const spaceView = {
     if (S.yaw === null) {   // start with your side of the planet facing you
       const loc = ctx.location(); S.yaw = loc.lon * RAD + SAT().gstime(new Date()); S.pitch = Math.max(-1.2, Math.min(1.2, loc.lat * RAD * 0.8));
     }
-    if (speed() === 1) S.simMs = Date.now();
+    if (liveMode()) S.simMs = Date.now();
     root.addEventListener('click', onClick);
     bindPointer(); resize(); window.addEventListener('resize', resize);
     ensureData(); controls();

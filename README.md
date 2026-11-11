@@ -22,7 +22,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **ISS**: list of passes (green = you can actually see it). Tap a pass for details, **Add to calendar** gives you a phone reminder 10 minutes before.
 - **Showers**: meteor showers. The top card is the best shower tonight (rough rate per hour, best viewing window, Moon interference). Below it is every major shower by next peak. Tap one for details, **Point at radiant** to aim at the spot the meteors streak from, or **Where to look** for a good place to watch (meteors have the longest trails 40–80° away from the radiant).
 - **Point**: hold the *back* of the phone up toward the sky and follow the dot. "On target ✓" turns green when you're lined up.
-  If left/right seems consistently off, aim at the Moon and tap **Compass tools → Calibrate**.
+  If left/right seems consistently off, open **Compass tools → Calibrate compass** (also in Settings), pick the Sun, Moon, Polaris, the ISS or a landmark, aim at it and tap Calibrate.
 - **Settings (gear)**: change location (type a ZIP code, use GPS, or enter coordinates), night mode, minimum pass height, compass correction.
   The compass correction (magnetic declination) is worked out automatically for your location; you can switch it to manual.
 
@@ -35,15 +35,19 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/iss.js`, `js/issService.js` | ISS orbit data, live position, pass prediction |
 | `js/compass.js` | Phone sensors → where the phone is pointing |
 | `js/magnetic.js` | Magnetic declination for your location (compass → true north) |
+| `js/calibration.js`, `js/views/calibrate.js` | One-tap compass calibration (**add a target: one entry**), the saved offset, and its sheet |
 | `js/showers.js` | Meteor shower list (**add a shower: one entry**), dates, radiant positions, tonight's plan |
 | `js/geo.js` | ZIP code → location lookup |
 | `js/skymath.js`, `js/skydata.js`, `data/sky.json` | Sky-map maths, star catalogue loader, ~5,000 stars + constellations |
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
+| `js/identify.js` | “What’s this?” ranking: wide search, ordered by brightness, movement and passes happening now |
 | `js/planes.js`, `js/ufo.js`, `js/views/planes.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
 | `js/comets.js` | Comet orbits, positions and brightness estimates |
 | `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
-| `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (globe, Moon, planets), coastlines, shared canvas colours |
+| `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (Earth globe, Moon orbit, solar system, shared speed control), coastlines, shared canvas colours |
+| `js/moons.js`, `js/views/spacePlanet.js` | Planet close-ups: moon positions (**add a moon: one row**), ring tilt, phases, “through binoculars tonight” |
+| `js/moonmap.js`, `js/views/spaceMoon.js` | Moon close-up: named seas, craters and Apollo sites (**add a feature: one row**), the spinnable globe |
 | `js/events.js` | Eclipses, special Moons, planet events — pure calculations |
 | `js/targets.js` | Everything the finder can aim at |
 | `js/back.js` | Android Back button: close sheet/popup → Look Up → exit |

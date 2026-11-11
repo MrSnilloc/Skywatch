@@ -5,7 +5,8 @@ import { createOrientation, angleDiff } from '../compass.js';
 import { listTargets, resolveTarget } from '../targets.js';
 import * as sky from '../sky.js';
 import { store } from '../store.js';
-import { currentDeclination } from '../magnetic.js';
+import { compassCorrection, isCalibrated, describeOffset } from '../calibration.js';
+import { openCalibrate } from './calibrate.js';
 import { icons, toast, esc } from '../ui.js';
 
 const RAD = Math.PI / 180;
@@ -159,14 +160,16 @@ function onClick(e) {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   if (b.dataset.act === 'enable') return startSensors();
-  if (b.dataset.act === 'calibrate') {
-    const aim = currentAim();
-    if (!aim || !target || target.unavailable || !(orient && orient.read())) return toast('Aim at the target first');
-    const delta = angleDiff(aim.az, target.az);
-    store.set('azOffset', ((store.get('azOffset') + delta) % 360 + 360) % 360);
-    toast(`Compass trimmed by ${delta >= 0 ? '+' : ''}${delta.toFixed(0)}°`);
-  }
-  if (b.dataset.act === 'reset') { store.set('azOffset', 0); toast('Compass trim reset'); }
+  if (b.dataset.act === 'calibrate') openCalibrate(ctx, drawCompassStatus);
+}
+
+/** The "Compass tools" fold: what correction is applied right now. */
+function drawCompassStatus() {
+  if (!el || !el.querySelector('#cal-line')) return;
+  el.querySelector('#cal-badge').innerHTML = isCalibrated() ? '<span class="badge good" style="margin:0 0 0 6px">calibrated</span>' : '';
+  el.querySelector('#cal-line').textContent = isCalibrated()
+    ? `Compass corrected ${describeOffset()}. If the dot still seems off left/right, calibrate again.`
+    : 'If the dot seems consistently off left/right, calibrate against the Sun, Moon, Polaris or a landmark.';
 }
 
 function bindDrag() {
@@ -191,17 +194,17 @@ export const pointView = {
       <div class="finder"><canvas id="cv"></canvas></div>
       <div class="readout"><div id="instr" class="instr"></div><div id="tinfo" class="muted"></div><div id="aim" class="sub"></div></div>
       <div id="sensor-msg" class="card warn hidden"></div>
-      <details class="fold"><summary>Compass tools</summary>
-        <p class="sub">If the dot seems consistently off left/right, aim at the Moon or a known object, then tap Calibrate.</p>
-        <div class="actions"><button class="btn" data-act="calibrate">Calibrate to target</button><button class="btn ghost" data-act="reset">Reset</button></div>
-        <p class="sub">Trim: ${store.get('azOffset').toFixed(0)}° · Magnetic declination: ${currentDeclination(ctx.location()).toFixed(1)}° (${store.get('declAuto') ? 'automatic' : 'manual'})</p>
+      <details class="fold"><summary>Compass tools <span id="cal-badge"></span></summary>
+        <p class="sub" id="cal-line"></p>
+        <div class="actions"><button class="btn" data-act="calibrate">Calibrate compass</button></div>
       </details></div>`;
     cv = el.querySelector('#cv'); g = cv.getContext('2d');
     el.addEventListener('click', onClick);
+    drawCompassStatus();
     sim = null;
     orient = createOrientation({
       smoothing: ctx.config.point.smoothing,
-      getCorrection: () => currentDeclination(ctx.location()) + store.get('azOffset'),
+      getCorrection: () => compassCorrection(ctx.location()),
     });
     setTarget(targetId); store.set('lastTarget', targetId);
     resize(); window.addEventListener('resize', resize); bindDrag();

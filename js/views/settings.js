@@ -10,6 +10,8 @@ import { fmtAge } from '../time.js';
 import { currentDeclination } from '../magnetic.js';
 import { esc, toast } from '../ui.js';
 import { openNotifySettings } from './notifySettings.js';
+import { openCalibrate } from './calibrate.js';
+import { isCalibrated, describeOffset } from '../calibration.js';
 
 const SECTIONS = [
   { title: 'Display', items: [
@@ -25,7 +27,7 @@ const SECTIONS = [
   { title: 'Compass', items: [
     { key: 'declAuto', type: 'toggle', label: 'Automatic compass correction', hint: (ctx) => `Currently ${currentDeclination(ctx.location()).toFixed(1)}° for your location` },
     { key: 'declination', type: 'number', label: 'Manual correction (°)', hint: 'Used when automatic is off (west is negative)', step: 0.5 },
-  ]},
+  ], after: () => `<button class="card tap set-link" data-act="calibrate" style="margin-top:8px"><span class="grow"><span class="val">Calibrate compass</span>${isCalibrated() ? ' <span class="badge good" style="margin:0 0 0 6px">calibrated</span>' : ''}<span class="sub">${isCalibrated() ? `Corrected ${describeOffset()} · tap to redo or reset` : 'Aim at the Sun, Moon, Polaris, the ISS or a landmark'}</span></span><span class="chev">›</span></button>` },
 ];
 
 function itemHTML(it, ctx) {
@@ -52,7 +54,7 @@ export function openSettings(ctx) {
       <div class="loc-grid"><input id="in-lat" type="number" step="0.001" value="${loc.lat}" aria-label="Latitude"><input id="in-lon" type="number" step="0.001" value="${loc.lon}" aria-label="Longitude"><button class="btn ghost small" data-act="setloc">Set</button></div></div>
     <h3 class="sect">Notifications</h3>
     <button class="card tap set-link" data-act="notify"><span class="grow"><span class="val">Choose what to be told about</span><span class="sub">Passes, eclipses, launches, comets, tonight’s sky…</span></span><span class="chev">›</span></button>
-    ${SECTIONS.map(s => `<h3 class="sect">${s.title}</h3><div class="card list-in">${s.items.map(it => itemHTML(it, ctx)).join('')}</div>`).join('')}
+    ${SECTIONS.map(s => `<h3 class="sect">${s.title}</h3><div class="card list-in">${s.items.map(it => itemHTML(it, ctx)).join('')}</div>${s.after ? s.after() : ''}`).join('')}
     <h3 class="sect">Data</h3>
     <div class="card"><div class="sub">ISS orbit data: ${iss.tle ? `${fmtAge(Date.now() - iss.tle.epoch)} old (downloaded ${fmtAge(Date.now() - iss.tle.fetchedAt)} ago)` : 'not loaded'}</div>
       <div class="actions"><button class="btn" data-act="refresh">Refresh orbit data now</button></div></div>
@@ -65,6 +67,7 @@ export function openSettings(ctx) {
     if (!b) return;
     if (b.dataset.act === 'close') close();
     if (b.dataset.act === 'notify') openNotifySettings(ctx, () => openSettings(ctx));
+    if (b.dataset.act === 'calibrate') openCalibrate(ctx, () => openSettings(ctx));
     if (b.dataset.act === 'refresh') { close(); refreshIss(ctx, { forceFetch: true }); toast('Refreshing ISS data…'); }
     if (b.dataset.act === 'gps') useGPS(ctx, sheet);
     if (b.dataset.act === 'zip') useZip(ctx, sheet);

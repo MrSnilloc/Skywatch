@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.20.0',
+  version: '0.24.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -13,7 +13,7 @@ export const CONFIG = {
     locName: 'Home (ZIP 24133)',
     declAuto: true,          // work out the compass correction from the location automatically
     declination: -8.5,       // manual compass correction in degrees (west = negative), used when declAuto is off
-    azOffset: 0,             // extra compass trim set by "Calibrate" on the Point screen
+    azOffset: 0,             // saved compass calibration offset in degrees, east positive (see calibration.js)
     hour12: true,
     nightMode: false,        // red night-vision theme
     showFab: true,           // floating "What's this?" camera button
@@ -41,6 +41,33 @@ export const CONFIG = {
     calendarLeadMin: 10,     // calendar reminder fires this many minutes before the pass
   },
 
+  space: {
+    // The one speed control shared by every Space view: [app-seconds per real second, label]. Rewind flips the sign.
+    speeds: [[1, 'Live'], [60, '1 min/s'], [3600, '1 hr/s'], [86400, '1 day/s']],
+    orbitLinesSpeed: 3600,   // at this speed or faster, Earth's satellites are drawn as orbit lines instead of dots
+    binoMagLimit: 9.5,       // faintest moon ordinary binoculars can show (higher number = fainter)
+    binoGlareRadii: 2,       // a moon closer than this many planet-radii to its planet is lost in the glare
+    binoFieldArcmin: 30,     // width of sky shown in "Through binoculars tonight" (the Moon is about 30′ wide)
+  },
+
+  identify: {               // "What's this?" (identify.js)
+    radiusDeg: 25,           // search this far around the aim point (phone compasses can be 10–20° off)
+    sureDeg: 8,              // a match this close to the aim point is called "Identified!"
+    farWeight: 0.25,         // how much something at the edge of the circle still counts (0 = not at all, 1 = fully)
+    moveBonus: 0.15,         // extra weight for things that move (satellites, planes, rockets)
+    passBonus: 0.35,         // extra weight for a highlighted satellite (the ISS) passing over right now
+    starMaxMag: 2.6,         // only stars brighter than this are offered
+    darkSunAlt: -4,          // stars and planets count once the Sun is this far down
+    nightSunAlt: -6,         // below this the aiming view is the live sky map + crosshair instead of the camera
+  },
+
+  compass: {
+    maxOffsetDeg: 30,        // a calibration bigger than this is refused (metal or a magnet nearby)
+    maxAltGapDeg: 20,        // the phone's tilt must be within this of the target's height to count as "aimed at it"
+    minTargetAltDeg: 5,      // targets lower than this are too close to the horizon to use
+    maxTargetAltDeg: 70,     // targets higher than this are too close to overhead for a compass fix
+  },
+
   sats: {
     // Extra satellites offered on the Passes screen (ISS is built in). Sources are tried in order.
     featured: [
@@ -54,6 +81,8 @@ export const CONFIG = {
     groupUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle',   // ~150 brightest satellites
     groupMax: 160,
     overheadMinEl: 5,
+    // These get a big marker on the Sky map, plus a "pass now" banner and an edge arrow while they can be seen.
+    highlight: ['iss'],
     // Starlink "trains": satellites from launches in the last 30 days still fly in a visible line.
     starlinkUrl: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=json',
     starlinkFadeDays: 14,    // after this the train spreads out and dims (still listed, marked "fading")        // sky map marks satellites above this elevation

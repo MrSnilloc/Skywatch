@@ -175,6 +175,10 @@ html.night .sky-top .seg, html.night .chip, html.night .sky-time, html.night .sk
 html.night .sky-hud { color: var(--text); }
 .sky-note { position: absolute; top: 76px; left: 12px; right: 12px; font-size: 12px; color: var(--warn); text-shadow: 0 1px 3px #000; pointer-events: none; }
 .sky-wrap .stop { position: absolute; top: 96px; right: 10px; color: var(--good); }
+/* "ISS pass now" banner — tap it to be guided there */
+.sky-wrap .pass-now { position: absolute; top: 96px; left: 10px; max-width: calc(100% - 20px); color: var(--accent); font-weight: 650; border-color: var(--accent);
+  background: #0a1220e6; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sky-wrap .pass-now ~ .stop:not(.hidden) { top: 140px; }
 .sky-zoom { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
 .sky-zoom .chip { width: 40px; padding: 8px 0; text-align: center; font-size: 18px; line-height: 1; }
 .sky-time { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; background: #0a1220cc; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; backdrop-filter: blur(6px); }
@@ -234,10 +238,20 @@ html.night .ecl-icon svg circle:first-child { fill: var(--accent); }
 .seg.wide button { padding: 7px 2px; font-size: 12.5px; }
 
 /* ---- Space ---- */
+/* Space: picker chips, action chips and the one-line caption under the top bar */
+.sp-bar { position: absolute; top: 52px; left: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.sp-bar > * { pointer-events: auto; }
+.sp-bar .chip { padding: 6px 12px; font-size: 13px; background: #0a1220cc; backdrop-filter: blur(6px); }
+.sp-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-acts:empty, #sp-pick:empty { display: none; }
+.sp-hint { font-size: 12px; color: #cfe0ff; text-shadow: 0 1px 3px #000; pointer-events: none; white-space: pre-line; }
+html.night .sp-hint { color: var(--text); }
 .sp-time { font-size: 12px; color: #cfe0ff; text-shadow: 0 1px 3px #000; font-variant-numeric: tabular-nums; text-align: right; }
 html.night .sp-time { color: var(--text); }
 #sp-speed button.on { color: var(--text); font-weight: 650; background: var(--panel2); }
-#sp-speed button { min-width: 0; padding: 9px 10px; }
+#sp-speed button { min-width: 0; padding: 9px 10px; white-space: nowrap; }
+#sp-speed { left: 0; right: 0; transform: none; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; }
+.sp-wrap .sky-top .seg { flex: none; } .sp-wrap .sky-top .seg button { white-space: nowrap; }
 #nav button { font-size: 10.5px; }
 .sp-zoom { position: absolute; right: 10px; top: 76px; }
 
@@ -285,7 +299,7 @@ textarea { width: 100%; background: var(--panel); color: var(--text); border: 1p
 .sky-wrap.cam .cam-ui { display: block; }
 .cam-ui { position: absolute; inset: 0; z-index: 3 !important; pointer-events: none; }
 .cam-ui > * { pointer-events: auto; }
-.sky-wrap.cam .sky-top, .sky-wrap.cam .sky-zoom, .sky-wrap.cam .sky-time, .sky-wrap.cam .sky-ufo, .sky-wrap.cam .stop, .sky-wrap.cam #sky-hud { display: none !important; }
+.sky-wrap.cam .sky-top, .sky-wrap.cam .sky-zoom, .sky-wrap.cam .sky-time, .sky-wrap.cam .sky-ufo, .sky-wrap.cam .stop, .sky-wrap.cam .pass-now, .sky-wrap.cam #sky-hud { display: none !important; }
 .cam-top { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .cam-top #cam-hint { font-weight: 500; font-size: 12px; flex: 1; }
 .cam-panel { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #0a1220e6; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; backdrop-filter: blur(8px); }
@@ -294,6 +308,8 @@ html.night .cam-panel { background: #180404e6; }
 .ufo-photo { width: 100%; border-radius: 14px; margin: 8px 0 4px; border: 1px solid var(--line); }
 .ufo-thumb { width: 100%; max-width: 220px; border-radius: 10px; display: block; margin-bottom: 6px; }
 .sky-wrap.cam .sky-info { bottom: 175px; }
+/* night aiming view: live sky map + crosshair; keep the direction readout */
+.sky-wrap.cam.scope #sky-hud { display: block !important; top: 54px; }
 
 /* ---- planes radar ---- */
 /* planes view */

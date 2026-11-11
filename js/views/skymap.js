@@ -7,7 +7,7 @@ import * as M from '../skymath.js';
 import * as sky from '../sky.js';
 import { loadSkyData, skyData, updateSkyPositions, vecAt } from '../skydata.js';
 import { createOrientation } from '../compass.js';
-import { currentDeclination } from '../magnetic.js';
+import { compassCorrection, nudgeOffset, isCalibrated } from '../calibration.js';
 import { store } from '../store.js';
 import { icons, esc, toast } from '../ui.js';
 import { loadGroup, overheadNow } from '../satellites.js';
@@ -15,7 +15,7 @@ import { fmtTime, fmtDayInline } from '../time.js';
 import { col, mix } from '../colors.js';
 import { loadComets, interestingComets, cometAt } from '../comets.js';
 import { loadPlanes, planeLook, kmToMi, ktToMph } from '../planes.js';
-import { assess } from '../launches.js';
+import { rankCandidates, confidence } from '../identify.js';
 import { getLog, addToLog, removeFromLog, explain } from '../ufo.js';
 
 const A = () => globalThis.Astronomy;
@@ -35,7 +35,9 @@ const LAYER_LABELS = [
 ];
 
 let ctx, root, cv, g, W = 0, H = 0, dpr = 1, raf = 0, dirty = true, orient = null, mounted = false;
-let video = null, stream = null, camErr = '', camCircleDeg = 10, camPanelAt = 0, camP = null, scanning = 0;
+// "What's this?" aiming view (S.camMode). By day it shows the camera; at night (S.scope) the camera sees
+// nothing, so it shows the live sky map with a crosshair instead.
+let video = null, stream = null, camErr = '', camCircleDeg = 10, camP = null, scanning = 0;
 let nightWas = false, model = null, modelSec = -1, hits = [], starScr = null, lastView = null, wakeLock = null, ready = false, noData = '';
 const pointers = new Map();
 let gc = null, gg = null;
@@ -76,7 +78,8 @@ function updateModel(force) {
   const sats = [];
   if (S.layers.sats) {
     for (const s of overheadNow(ctx, l, date, ctx.config.sats.overheadMinEl)) {
-      const o = { id: 'sat:' + s.id, kind: 'sat', label: s.name, vec: M.azAltToVec(s.az, s.el), az: s.az, alt: s.el, rangeKm: s.rangeKm, sunlit: s.sunlit, seen: s.sunlit && dark };
+      const o = { id: 'sat:' + s.id, kind: 'sat', label: s.name, vec: M.azAltToVec(s.az, s.el), az: s.az, alt: s.el, rangeKm: s.rangeKm, sunlit: s.sunlit, seen: s.sunlit && dark,
+        star: ctx.config.sats.highlight.includes(s.id) };
       add(o); sats.push(o);
     }
   }
@@ -88,7 +91,8 @@ function updateModel(force) {
       add({ id: 'plane:' + pl.id, kind: 'plane', label: pl.call, vec: M.azAltToVec(lk.az, lk.el), next: M.azAltToVec(ahead.az, ahead.el), az: lk.az, alt: lk.el, plane: pl, look: lk });
     }
   }
-  model = { date, obs, sunAlt: sun.alt, objs, sats };
+  // passNow = a highlighted satellite (the ISS) that is up AND visible to the eye right now
+  model = { date, obs, sunAlt: sun.alt, objs, sats, passNow: sats.find(o => o.star && o.seen) || null };
   dirty = true;
 }
 
@@ -165,7 +169,7 @@ function draw() {
   const view = currentView(); lastView = view;
   const span = Math.max(W, H), scale = M.scaleFor(S.fov, span);
   const cx = W / 2, cy = H / 2;
-  const cam = S.camMode;
+  const aiming = S.camMode, cam = aiming && !S.scope;
   let P;
   if (cam) {
     // camera lens = straight-line (gnomonic) projection; camFov is the angle across the video's long side
@@ -173,7 +177,10 @@ function draw() {
     const f = (Math.max(vw, vh) / 2) / Math.tan(S.camFov * RAD / 2) * Math.max(W / vw, H / vh);
     camCircleDeg = Math.atan(Math.min(W, H) * 0.15 / f) * DEG;
     P = (v) => { const sz = M.dot(v, view.fwd); if (sz < 0.08) return null; return [cx + f * M.dot(v, view.right) / sz, cy - f * M.dot(v, view.up) / sz, sz]; };
-  } else P = (v) => { const p = M.project(v, view, scale); return p ? [cx + p[0], cy + p[1], p[2]] : null; };
+  } else {
+    P = (v) => { const p = M.project(v, view, scale); return p ? [cx + p[0], cy + p[1], p[2]] : null; };
+    if (aiming) { camCircleDeg = Math.min(W, H) * 0.15 / scale * DEG; camP = P; }
+  }
   const onScr = (p, m = 30) => p && p[0] > -m && p[0] < W + m && p[1] > -m && p[1] < H + m;
   hits = [];
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -363,10 +370,13 @@ function draw() {
       const p = P(o.vec);
       if (!onScr(p, 30)) continue;
       const c = o.seen ? '#5cc8ff' : '#6b7c96';
-      g.strokeStyle = col(c); g.fillStyle = col(c); g.lineWidth = o.seen ? 2 : 1.2;
-      g.beginPath(); g.moveTo(p[0], p[1] - 6); g.lineTo(p[0] + 6, p[1]); g.lineTo(p[0], p[1] + 6); g.lineTo(p[0] - 6, p[1]); g.closePath();
+      const r = o.star ? 10 : 6;                       // highlighted satellites (the ISS) stand out from the rest
+      g.strokeStyle = col(c); g.fillStyle = col(c); g.lineWidth = o.seen ? 2 : o.star ? 1.8 : 1.2;
+      if (o.star && o.seen) { g.globalAlpha = 0.22; g.beginPath(); g.arc(p[0], p[1], 19, 0, 2 * Math.PI); g.fill(); g.globalAlpha = 1; }
+      g.beginPath(); g.moveTo(p[0], p[1] - r); g.lineTo(p[0] + r, p[1]); g.lineTo(p[0], p[1] + r); g.lineTo(p[0] - r, p[1]); g.closePath();
       o.seen ? g.fill() : g.stroke();
-      g.fillText(o.label + (o.seen ? '' : o.sunlit ? '' : ' (shadow)'), p[0] + 9, p[1] + 4);
+      g.font = o.star ? '700 14px system-ui' : '10px system-ui';
+      g.fillText(o.label + (o.seen ? '' : o.sunlit ? '' : ' (shadow)'), p[0] + (o.star ? 20 : r + 3), p[1] + (o.star ? 5 : 4));
       hits.push({ x: p[0], y: p[1], id: o.id, label: o.label, pri: 10 });
     }
   }
@@ -396,44 +406,62 @@ function draw() {
     }
     return { on: false, t };
   };
+  // arrow near the screen edge pointing toward something that is off-screen, with how far to turn
+  const edgeArrow = (vec, label, colr) => {
+    const sx = M.dot(vec, view.right), sy = M.dot(vec, view.up);
+    const ang = Math.atan2(sy, sx), rad = Math.min(W, H) / 2 - 40;
+    const ax = cx + Math.cos(ang) * rad, ay = cy - Math.sin(ang) * rad;
+    const dist = Math.round(M.angleBetween(vec, view.fwd));
+    g.save(); g.translate(ax, ay); g.rotate(-ang);
+    g.fillStyle = col(colr); g.beginPath(); g.moveTo(20, 0); g.lineTo(-10, -13); g.lineTo(-4, 0); g.lineTo(-10, 13); g.closePath(); g.fill();
+    g.restore();
+    g.font = '600 12px system-ui'; g.fillStyle = col(colr); g.textAlign = 'center';
+    g.fillText(`${label} · ${dist}°`, Math.max(60, Math.min(W - 60, ax)), ay + (ay > cy ? -22 : 30)); g.textAlign = 'start';
+  };
+  // a pass is happening: point at it whenever it is off-screen (no need to pick it under Find first)
+  const pass = cam ? null : model.passNow;
+  if (pass && S.target !== pass.id && !onScr(P(pass.vec), -10)) edgeArrow(pass.vec, pass.label, '#5cc8ff');
   if (S.sel) ring(S.sel.id, '#ffffff');
   if (S.target) {
     const r = ring(S.target, '#62f0a5');
-    if (r && !r.on) {
-      const sx = M.dot(r.t.vec, view.right), sy = M.dot(r.t.vec, view.up);
-      const ang = Math.atan2(sy, sx), rad = Math.min(W, H) / 2 - 40;
-      const ax = cx + Math.cos(ang) * rad, ay = cy - Math.sin(ang) * rad;
-      const dist = Math.round(M.angleBetween(r.t.vec, view.fwd));
-      g.save(); g.translate(ax, ay); g.rotate(-ang);
-      g.fillStyle = col('#62f0a5'); g.beginPath(); g.moveTo(20, 0); g.lineTo(-10, -13); g.lineTo(-4, 0); g.lineTo(-10, 13); g.closePath(); g.fill();
-      g.restore();
-      g.font = '600 12px system-ui'; g.fillStyle = col('#62f0a5'); g.textAlign = 'center';
-      g.fillText(`${r.t.label} · ${dist}°`, Math.max(60, Math.min(W - 60, ax)), ay + (ay > cy ? -22 : 30)); g.textAlign = 'start';
-    } else if (r && r.on && M.angleBetween(r.t.vec, view.fwd) < 1.5 && S.mode === 'live') {
+    if (r && !r.on) edgeArrow(r.t.vec, r.t.label, '#62f0a5');
+    else if (r && r.on && M.angleBetween(r.t.vec, view.fwd) < 1.5 && S.mode === 'live') {
       toast(`${r.t.label} is right there`); S.target = null; updateButtons();
     }
   }
 
-  // camera crosshair: whatever is inside the circle is what you're asking about
-  if (cam) {
+  // crosshair: whatever is inside the circle is what you're asking about
+  if (aiming) {
     const Rc = Math.min(W, H) * 0.15;
     g.strokeStyle = col('#62f0a5'); g.lineWidth = 2; g.shadowColor = '#000'; g.shadowBlur = 6;
     g.beginPath(); g.arc(cx, cy, Rc, 0, 2 * Math.PI); g.stroke();
     g.beginPath(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { g.moveTo(cx + dx * (Rc - 10), cy + dy * (Rc - 10)); g.lineTo(cx + dx * (Rc + 14), cy + dy * (Rc + 14)); }
     g.moveTo(cx - 6, cy); g.lineTo(cx + 6, cy); g.moveTo(cx, cy - 6); g.lineTo(cx, cy + 6); g.stroke(); g.shadowBlur = 0;
   }
+  if (aiming) {
+    if (scanning) {
+      const Rc = Math.min(W, H) * 0.15, a = (performance.now() - scanning) / 1000 * 7;
+      g.strokeStyle = col('#62f0a5'); g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, Rc + 7, a, a + 1.2); g.stroke();
+    }
+    const hint = root.querySelector('#cam-hint');
+    const ht = noData || (scanning ? 'Scanning the sky…' : 'Night view — put the light in the circle');
+    if (hint.textContent !== ht) hint.textContent = ht;
+  }
   // centre reticle (live only) and HUD
-  if (S.mode === 'live' && !cam) {
+  if (S.mode === 'live' && !aiming) {
     g.strokeStyle = col('#ffffff'); g.globalAlpha = 0.35; g.lineWidth = 1;
     g.beginPath(); g.moveTo(cx - 10, cy); g.lineTo(cx + 10, cy); g.moveTo(cx, cy - 10); g.lineTo(cx, cy + 10); g.stroke(); g.globalAlpha = 1;
   }
   const c = M.vecToAzAlt(view.fwd);
   const hud = root.querySelector('#sky-hud');
-  const txt = `${sky.dirName(c.az)} ${Math.round(c.az)}° · ${Math.round(c.alt)}° up · ${Math.round(S.fov)}° view`;
+  const txt = `${sky.dirName(c.az)} ${Math.round(c.az)}° · ${Math.round(c.alt)}° up · ${Math.round(S.fov)}° view${S.mode === 'live' && isCalibrated() ? ' · calibrated ✓' : ''}`;
   if (hud.dataset.t !== txt) { hud.textContent = txt; hud.dataset.t = txt; }
   const note = root.querySelector('#sky-note');
   const nt = noData || (dayT > 0.6 ? 'Daytime — stars are drawn for reference; you can’t see them now' : '');
   if (note.dataset.t !== nt) { note.textContent = nt; note.dataset.t = nt; note.classList.toggle('hidden', !nt); }
+  const pb = root.querySelector('#sky-pass');
+  const pt = pass ? `${pass.label} pass ${S.offsetMs === 0 ? 'now' : 'at this time'} · ${sky.dirName(pass.az)}, ${Math.round(pass.alt)}° up` : '';
+  if (pb.dataset.t !== pt) { pb.textContent = pt; pb.dataset.t = pt; pb.classList.toggle('hidden', !pt); }
   const tl = root.querySelector('#sky-time');
   const tt = S.offsetMs === 0 ? 'Now' : `${fmtDayInline(model.date)} ${fmtTime(model.date)}`;
   if (tl.dataset.t !== tt) { tl.textContent = tt; tl.dataset.t = tt; }
@@ -564,40 +592,7 @@ function openFind() {
 
 // ---------- "What's that light?" ----------
 
-function candidatesAt(fwd, extra = 0) {
-  const out = [];
-  const dark = model.sunAlt < -4;
-  const consider = (kind, id, label, vec, tol, weight, more = {}) => {
-    if (!vec || vec[2] < -0.05) return;
-    const d = M.angleBetween(vec, fwd), t = tol + extra;
-    if (d <= t) out.push({ kind, id, label, d, vec, score: d / t * weight, ...more });
-  };
-  for (const o of model.objs.values()) {
-    if (o.kind === 'sun') consider('sun', o.id, 'Sun', o.vec, 12, 0.5);
-    else if (o.kind === 'moon') consider('moon', o.id, 'Moon', o.vec, 12, 0.4);
-    else if (o.kind === 'planet' && o.mag < 6.5) consider('planet', o.id, o.label, o.vec, 10, (o.mag < -2 ? 0.5 : o.mag < 1.5 ? 0.75 : 1.2) * (dark || o.mag < -3 ? 1 : 1.3), { mag: o.mag });
-    else if (o.kind === 'comet' && o.mag < 8) consider('comet', o.id, 'Comet ' + o.label, o.vec, 6, 1);
-    else if (o.kind === 'plane') consider('plane', o.id, o.label, o.vec, 12, 0.7, { plane: o.plane, look: o.look });
-    else if (o.kind === 'sat') {
-      const train = /^sat:sl/.test(o.id);
-      if (o.seen || train) consider(train ? 'train' : 'sat', o.id, o.label, o.vec, 10, train ? 0.6 : 0.9, { seen: o.seen });
-    }
-  }
-  const D = skyData();
-  if (D) for (let i = 0; i < D.nStars && D.mag[i] < 2.6; i++) consider('star', 'star:' + i, D.raw.names[i] || 'Bright star', vecAt(i), 6, 1 + D.mag[i] * 0.2, { mag: D.mag[i] });
-  // a rocket launch in the last hour from a pad you could see
-  if (ctx.launches && ctx.launches.status === 'ready') {
-    for (const lnch of ctx.launches.list) {
-      const age = (model.date - lnch.net) / 60000;
-      if (age < -2 || age > 45) continue;
-      const v = assess(lnch, ctx.location(), ctx.config.launches);
-      if (v.level !== 'likely' && v.level !== 'maybe') continue;
-      const dirAz = { N: 0, NNE: 22.5, NE: 45, ENE: 67.5, E: 90, ESE: 112.5, SE: 135, SSE: 157.5, S: 180, SSW: 202.5, SW: 225, WSW: 247.5, W: 270, WNW: 292.5, NW: 315, NNW: 337.5 }[v.dir] || 0;
-      consider('launch', 'launch:' + lnch.id, lnch.name, M.azAltToVec(dirAz, 12), 30, 0.7);
-    }
-  }
-  return out.sort((a, b) => a.score - b.score);
-}
+const candidatesAt = (fwd) => rankCandidates(ctx, model, fwd);
 
 function candLine(c) {
   if (c.kind === 'plane') return `${c.label}${c.plane.type ? ' (' + c.plane.type + ')' : ''} · ${Math.round(c.look.altFt).toLocaleString()} ft · ${Math.round(kmToMi(c.look.rangeKm))} mi away`;
@@ -605,22 +600,13 @@ function candLine(c) {
   return c.label;
 }
 
-function updateCamPanel(fwd) {
-  const box = root && root.querySelector('#cam-res'); if (!box) return;
-  const list = candidatesAt(fwd, camCircleDeg * 0.6), best = list[0];
-  const html = best
-    ? `<div class="eyebrow">In the circle</div><div class="big">${esc(candLine(best))}</div><div class="sub">${esc(explain(best))}</div>${list.length > 1 ? `<div class="sub" style="margin-top:4px">Also close: ${esc(list.slice(1, 4).map(c => c.label).join(', '))}</div>` : ''}`
-    : `<div class="eyebrow">In the circle</div><div class="big">Nothing known here</div><div class="sub">No planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch near the circle. Tap “Capture” to record it.</div>`;
-  if (box.dataset.h !== html) { box.innerHTML = html; box.dataset.h = html; }
-  const hint = root.querySelector('#cam-hint');
-  const ht = camErr || noData || 'Put the light in the circle · pinch if labels don’t line up';
-  if (hint.textContent !== ht) hint.textContent = ht;
-}
-
 async function enterCam() {
   S.camMode = true; S.mode = 'live'; S.sel = null; showInfo();
   S.camFov = +(store.getCache('camFov') || 66);
-  root.classList.add('cam'); document.body.classList.add('cam-on'); updateButtons(); startLive(); camErr = '';
+  // at night the camera only shows black: use the live sky map with a crosshair instead
+  S.scope = sky.sunAltitude(new Date(), sky.makeObserver(loc())) < ctx.config.identify.nightSunAlt;
+  root.classList.add('cam'); root.classList.toggle('scope', S.scope); document.body.classList.add('cam-on'); updateButtons(); startLive(); camErr = '';
+  if (S.scope) { dirty = true; return; }
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('not supported here');
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
@@ -634,10 +620,10 @@ async function enterCam() {
 }
 
 function exitCam() {
-  S.camMode = false;
+  S.camMode = false; S.scope = false;
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null; if (video) video.remove(); video = null;
-  if (root) root.classList.remove('cam');
+  if (root) root.classList.remove('cam', 'scope');
   document.body.classList.remove('cam-on');
   dirty = true;
 }
@@ -667,30 +653,38 @@ function capturePhoto(mark = null) {
 function openUfo(photo = null, fwdIn = null) {
   if (!lastView || !model) return;
   const fwd = fwdIn || lastView.fwd, pos = M.vecToAzAlt(fwd);
-  const list = candidatesAt(fwd, S.camMode ? camCircleDeg * 0.6 : 0), best = list[0];
+  const list = candidatesAt(fwd), best = list[0], conf = confidence(ctx, best);
+  const R = ctx.config.identify.radiusDeg;
   const alignable = best && ['planet', 'moon', 'star'].includes(best.kind);
   const where = `${sky.dirName(pos.az)} ${Math.round(pos.az)}° · ${Math.round(pos.alt)}° up`;
   const planesNote = ctx.planes && ctx.planes.status === 'ready' ? '' : '<p class="tip">Plane data isn’t loaded, so aircraft weren’t checked.</p>';
   const nLog = getLog().length;
-  const body = best ? `<div class="card ufo-best"><div class="eyebrow">${S.camMode ? 'UpSight says it’s…' : 'Most likely'}</div><div class="big">${esc(candLine(best))}</div>
-      <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${best.d < 3 ? 'Right where you’re pointing.' : `About ${Math.round(best.d)}° from where you’re pointing.`}</div>
+  const why = (c) => c.passNow ? 'Passing over right now · ' : c.moving ? 'Moving · ' : '';
+  const off = (c) => c.d < 3 ? 'Right where you’re pointing.' : `${Math.round(c.d)}° from where the phone is aimed${c.d > ctx.config.identify.sureDeg ? ' — within normal compass error' : ''}.`;
+  const body = best ? `<div class="card ufo-best"><div class="eyebrow">${{ sure: 'UpSight says it’s…', probably: 'Most likely', nearest: 'Brightest thing near there' }[conf]}</div><div class="big">${esc(candLine(best))}</div>
+      <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${why(best)}${off(best)}</div>
       <div class="actions"><button class="btn small" data-show="${esc(best.id)}">Show me</button></div></div>
-    ${list.length > 1 ? `<h3 class="sect">Also nearby</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
+    ${list.length > 1 ? `<h3 class="sect">Other possibilities</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}${c.moving ? ' <span class="muted">· moving</span>' : ''}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
     : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
-      <div class="sub" style="margin-top:4px">Nothing UpSight knows about is near there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
-  openSheet(`<div class="sheet-head"><h2>${S.camMode ? (best ? 'Identified!' : 'Hmm…') : 'What’s this?'}</h2><button class="btn ghost small" data-close>Close</button></div>
+      <div class="sub" style="margin-top:4px">Nothing UpSight knows about is within ${R}° of there — no planet, bright star, satellite${ctx.planes && ctx.planes.status === 'ready' ? ', plane' : ''} or launch. Could be a drone, a balloon, a plane without a transponder… or something else.</div></div>`;
+  openSheet(`<div class="sheet-head"><h2>${{ sure: 'Identified!', probably: 'Probably…', nearest: 'Best guess', none: 'Hmm…' }[conf]}</h2><button class="btn ghost small" data-close>Close</button></div>
     ${photo ? `<img class="ufo-photo" src="${photo}" alt="">` : ''}
-    <p class="sub" style="margin:4px 0 10px">Checked around ${where}. ${S.mode === 'live' ? 'Phone compasses can be off by 5–10°.' : 'Using the centre of the map.'}</p>
+    <p class="sub" style="margin:4px 0 10px">Checked ${R}° around ${where}${S.mode === 'live' ? ', to allow for compass error' : ' (the centre of the map)'}. Ranked by brightness, movement and passes happening now.</p>
     ${body}${planesNote}
-    ${alignable && S.camMode ? `<p class="tip">Is the light in your photo really ${esc(best.label)}? Then <button class="linkbtn" data-align="1">line the compass up with it</button> so every label sits right.</p>` : ''}
+    ${alignable && S.camMode ? `<p class="tip">Is the light really ${esc(best.label)}? Then <button class="linkbtn" data-align="1">line the compass up with it</button> so every label sits right.</p>` : ''}
     <div class="actions" style="margin-top:12px"><button class="btn ${best ? 'ghost' : ''}" data-log="1">${best ? 'Not it — log as unidentified' : 'Log this sighting'}</button><button class="btn ghost" data-viewlog="1">UFO log (${nLog})</button></div>`,
   (e, close) => {
     const sh = e.target.closest('[data-show]');
-    if (sh) { close(); const id = sh.dataset.show; if (!S.camMode && !id.startsWith('launch:')) { select({ id, label: '' }); guide(id); } return; }
+    if (sh) {
+      close(); const id = sh.dataset.show;
+      if (S.camMode && !S.scope) return;                       // camera view: nothing to show on
+      if (S.scope) { exitCam(); updateButtons(); }             // night view: drop back to the plain live map and guide there
+      if (!id.startsWith('launch:')) { select({ id, label: '' }); if (S.target !== id) guide(id); }
+      return;
+    }
     if (e.target.closest('[data-align]')) {
       const tAz = M.vecToAzAlt(best.vec).az, d = ((tAz - pos.az + 540) % 360) - 180;
-      store.set('azOffset', ((store.get('azOffset') + d) % 360 + 360) % 360);
-      close(); toast(`Compass adjusted by ${d > 0 ? '+' : ''}${d.toFixed(1)}°`); return;
+      close(); toast(nudgeOffset(ctx, d).message); return;
     }
     if (e.target.closest('[data-log]')) { openLogForm(pos, list, photo); return; }
     if (e.target.closest('[data-viewlog]')) { openLogList(); }
@@ -767,7 +761,7 @@ function onClick(e) {
     case 'camclose': exitCam(); break;
     case 'camcap': {
       if (scanning || !lastView) break;
-      const fwd = lastView.fwd.slice(), best = candidatesAt(fwd, camCircleDeg * 0.6)[0];
+      const fwd = lastView.fwd.slice(), best = candidatesAt(fwd)[0];
       const photo = capturePhoto(best);                // grab the moment you asked
       scanning = performance.now(); dirty = true;
       setTimeout(() => { scanning = 0; openUfo(photo, fwd); }, 1400);
@@ -776,6 +770,7 @@ function onClick(e) {
     case 'find': if (b.closest('#sky-info')) { guide(S.sel.id); } else openFind(); break;
     case 'close': S.sel = null; showInfo(); dirty = true; break;
     case 'point': ctx.go('point', { target: S.sel.id }); break;
+    case 'passnow': { const o = model && model.passNow; if (o) { select({ id: o.id, label: o.label }); if (S.target !== o.id) guide(o.id); } break; }
     case 'stopguide': S.target = null; updateButtons(); showInfo(); dirty = true; break;
     case 'zin': S.fov = Math.max(12, S.fov / 1.3); dirty = true; break;
     case 'zout': S.fov = Math.min(110, S.fov * 1.3); dirty = true; break;
@@ -798,7 +793,7 @@ function bindPointer() {
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (lastDist > 0) {
-        if (S.camMode) { S.camFov = Math.max(30, Math.min(110, S.camFov * lastDist / d)); store.setCache('camFov', S.camFov); }
+        if (S.camMode && !S.scope) { S.camFov = Math.max(30, Math.min(110, S.camFov * lastDist / d)); store.setCache('camFov', S.camFov); }
         else S.fov = Math.max(12, Math.min(110, S.fov * lastDist / d));
         dirty = true;
       }
@@ -842,6 +837,7 @@ export const skyView = {
 
       <div id="sky-hud" class="sky-hud"></div>
       <div id="sky-note" class="sky-note hidden"></div>
+      <button class="chip pass-now hidden" id="sky-pass" data-a="passnow"></button>
       <button class="chip stop hidden" data-a="stopguide">Stop guiding</button>
       <div class="sky-zoom"><button class="chip" data-a="zin">＋</button><button class="chip" data-a="zout">－</button></div>
       <div id="sky-info" class="sky-info hidden"></div>
@@ -851,7 +847,7 @@ export const skyView = {
     root.addEventListener('click', onClick);
     bindPointer();
     window.addEventListener('resize', resize);
-    orient = createOrientation({ smoothing: 0.3, getCorrection: () => currentDeclination(ctx.location()) + store.get('azOffset') });
+    orient = createOrientation({ smoothing: 0.3, getCorrection: () => compassCorrection(ctx.location()) });
     const hasSensors = 'DeviceOrientationEvent' in window && (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
     if (params && params.mode) S.mode = params.mode; else if (!hasSensors) S.mode = 'free';
     if (params && params.target) { S.target = params.target; }
