@@ -123,7 +123,7 @@ export function overheadNow(ctx, loc, date, minEl) {
   const add = (name, satrec, id) => {
     const p = issAt(satrec, loc, date);
     if (!p || p.el < minEl) return;
-    out.push({ id, name, az: p.az, el: p.el, rangeKm: p.rangeKm, sunlit: isSunlit(p.eci, date) });
+    out.push({ id, name, satrec, az: p.az, el: p.el, rangeKm: p.rangeKm, sunlit: isSunlit(p.eci, date) });
   };
   if (ctx.iss.satrec) { add('ISS', ctx.iss.satrec, 'iss'); seen.add(25544); }
   for (const e of Object.values(ctx.sats.items)) if (e.satrec) { add(e.train ? `Starlink train (${e.train.count})` : e.name, e.satrec, e.id); seen.add(e.norad); }

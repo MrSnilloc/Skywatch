@@ -55,6 +55,11 @@ export function polarSVG(track, size = 64) {
     <circle cx="${e[0].toFixed(1)}" cy="${e[1].toFixed(1)}" r="2" fill="none" stroke="var(--text)" stroke-width="1.3"/></svg>`;
 }
 
+/** A small colour key: items = [{ color, label }]. `col` recolours for red night mode. */
+export function legendHTML(items, unit, col = (c) => c) {
+  return `<div class="legend">${items.map(i => `<span><i style="background:${col(i.color)}"></i>${esc(i.label)}</span>`).join('')}${unit ? `<span class="unit">${esc(unit)}</span>` : ''}</div>`;
+}
+
 let toastTimer = null;
 export function toast(msg) {
   let el = document.getElementById('toast');

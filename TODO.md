@@ -18,12 +18,24 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   first), cached per plane. Show airline name, From → To airports, a progress bar with time left, and
   "Private / no route" for planes with no flight number. Use the route in "What's this?" answers and plane
   alerts. Photos (Planespotters) later, not now.
+  - *BUILT 2026-11-11 in v0.27 (`js/routes.js`, sources in `config.planes.routeSources`). Sources checked:
+    adsb.lol = free for everyone, ODbL, routes from Virtual Radar Server's CC0 list — BUT its route endpoint was
+    returning empty answers on the test day; adsbdb.com = free public API (512 requests/min) that worked, BUT its
+    page says the route data "may not be copied, published, or incorporated into other databases without the
+    explicit permission of David J Taylor". The app tries adsb.lol first, adsbdb second, asks only for planes the
+    user looks at, and caches 6 h. Tested in a browser with a fake plane list + real adsbdb lookup. Waiting for
+    the owner's phone test.*
 
 - [ ] **2. SKY MAP SIDEWAYS** — turning the phone sideways goes full screen (top bar and tabs hidden, controls
   fade, tap to show them). Also add a manual full-screen button.
+  - *BUILT 2026-11-11 in v0.27 (`skymap.js` setFull/onTurn; fade time `config.sky.fullFadeMs`). ⛶ button, fade,
+    tap-to-show and Back-to-exit tested in a browser. Turning the phone sideways could NOT be tested there.
+    The Android status bar stays visible (only the app's own bars hide). Waiting for the owner's phone test.*
 
 - [ ] **3. PLANE COLOR LEGEND** — altitude key (under 5k ft orange, 5–15k yellow, 15–28k light blue, above 28k
   blue) on the plane map, radar and Sky map.
+  - *BUILT 2026-11-11 in v0.27 (bands in `config.planes.altBands`; planes on the Sky map are now coloured by
+    altitude too, and the key shows there while a plane is on screen). Waiting for the owner's phone test.*
 
 - [ ] **4. BUG: ISS missing from Sky map** — the ISS didn't show on the Sky map during a real pass
   (Nov 10, 2026). Check layer defaults, sunlit/dark filters and orbit-data age. Find the cause before
@@ -51,7 +63,7 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   screen. Only Back on Look Up exits the app. (Capacitor App plugin backButton listener.)
   - *Done 2026-11-11 in v0.20 (`js/back.js`, plugin in `android-app/plugins/app`). Owner confirmed on the phone.*
 
-- [ ] **8. SPACE TAB UPGRADE**
+- [x] **8. SPACE TAB UPGRADE**
   - Rename Planets to "Solar system".
   - Planet picker (Mercury–Neptune), each a close-up with its moons. Jupiter: exact Galilean moons plus their
     shadows crossing the planet. Saturn: rings at the true tilt, plus Titan and others. Mars: Phobos and
@@ -60,7 +72,7 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   - Earth tab: the Moon orbits and Earth spins when time is sped up; satellites switch to orbit lines at high speed.
   - One shared speed control for all Space views (Live, 1 min/s, 1 hr/s, 1 day/s, rewind).
 
-- [ ] **9. MOON CLOSE-UP** — a detailed Moon you can spin, with named craters and seas, the Apollo landing
+- [x] **9. MOON CLOSE-UP** — a detailed Moon you can spin, with named craters and seas, the Apollo landing
   sites, and today's lit edge highlighted as the best place to look with binoculars. Real phase and tilt
   for tonight.
 
@@ -68,7 +80,7 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   for my latitude (look north). New "Aurora" switch in Settings → Notifications, plus a Look Up card when
   there's a chance.
 
-- [ ] **11. COMPASS CALIBRATION (one-tap offset)** — pick a target, aim the phone at it, tap Calibrate. Save
+- [x] **11. COMPASS CALIBRATION (one-tap offset)** — pick a target, aim the phone at it, tap Calibrate. Save
   offset = the target's true azimuth − the compass heading on the phone, and apply it everywhere (Sky map,
   "What's this?", pointers).
   - Targets: Sun, Moon, Polaris (true north, altitude ≈ latitude), the ISS during a pass, or a landmark
@@ -97,7 +109,8 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   overlap the top of the picture when zoomed in; Moon craters look blocky near the lit edge.
 - Moon positions for Mars/Saturn/Uranus/Neptune were fitted from NASA JPL Horizons (public domain, used once at
   build time, not by the app). Add JPL to the credits screen.
-- None of #4, #5, #8, #9, #11 is ticked: all wait for the owner's phone test.
+- 2026-11-11: owner confirmed #8, #9 and #11 on the phone (ticked). #4 and #5 still wait for a night test.
+- Owner: Moon craters (blocky near the lit edge) to be improved LATER; Mercury, Venus, Neptune look good.
 
 ## Planet look (owner feedback 2026-11-11: painted planets don't look good, Jupiter has no Great Red Spot)
 - **BUILT in v0.25:** drag to fly around a planet + "◎ Recentre" chip (also on Earth and the Moon close-up);
@@ -117,6 +130,8 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 
 ## LATER, FOR GOOGLE PLAY (don't build yet — just kept here)
 - Privacy policy
+- Flight routes: get David Taylor's permission for adsbdb.com route data, or remove 'adsbdb' from `config.planes.routeSources`
+- Credits screen must list: Solar System Scope (CC BY 4.0), NASA/JPL Horizons, adsb.lol (ODbL), adsbdb.com
 - Map tiles that are allowed in an app
 - Credits screen
 - Signed release build

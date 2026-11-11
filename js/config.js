@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.26.0',
+  version: '0.28.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -130,6 +130,14 @@ export const CONFIG = {
     ],
     radiusNm: 60,            // look this far around you (nautical miles, ~110 km)
     refreshSec: 10,
+    // Colour by altitude (feet): [below this height, colour, label]. Used by the map, radar, Sky map and their key.
+    altBands: [[5000, '#ff9a4d', 'under 5k'], [15000, '#ffd27a', '5–15k'], [28000, '#9fe0ff', '15–28k'], [Infinity, '#5cc8ff', 'above 28k']],
+    // Flight routes (routes.js): tried in order. adsb.lol's list is public-domain; adsbdb.com is a free public API whose
+    // route data carries a "not to be copied or published without permission" notice — fine for looking a flight up,
+    // but get permission (or remove 'adsbdb' here) before publishing the app on Google Play.
+    routeSources: ['adsblol', 'adsbdb'],
+    routeCacheHours: 6,      // remember each flight's route this long
+    routeTimeoutMs: 6000,
     minEl: 1,                // only draw planes at least this far above your horizon
     // Dark map, no key needed: Esri "Dark Gray Canvas" (base + labels). If it fails, OpenStreetMap, darkened.
     mapLayers: [
@@ -143,6 +151,17 @@ export const CONFIG = {
     overheadSec: 300,        // ...within the next 5 minutes
   },
 
+  // Projected paths (paths.js): dotted line ahead with minute marks, faded trail behind.
+  paths: {
+    planeAheadMin: 3,        // every plane gets a dotted line this many minutes ahead
+    planeAheadSelMin: 10,    // the plane you tapped: longer, with "+1 min" labels
+    satAheadMin: 5,          // Sky map: satellites you can see (and the ISS, and the one you tapped)
+    satTrailMin: 3,
+    spaceMarksMin: 10,       // Space view: minute marks this far ahead of the satellite you tapped
+    stepSec: 15,             // one point every this many seconds (must divide 60)
+    labelGapPx: 26,          // minute labels closer together than this are skipped
+  },
+
   sky: {
     // Naked-eye planets are shown by default; the rest sit behind a "telescope" fold.
     planets: ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'],
@@ -151,6 +170,7 @@ export const CONFIG = {
       Mercury: '#b9b2a8', Venus: '#fff0c4', Mars: '#ff7b5c', Jupiter: '#ffd9a0',
       Saturn: '#e8d49a', Uranus: '#9fe8f0', Neptune: '#7aa5ff',
     },
+    fullFadeMs: 3500,        // full-screen Sky map: controls fade out after this long without a touch
     sunMinElongation: 12,    // planets closer to the Sun than this are "lost in the glare"
     heavyRefreshMs: 60000,   // rise/set + moon phases are recomputed this often
     lightRefreshMs: 5000,    // positions on the Tonight screen refresh this often

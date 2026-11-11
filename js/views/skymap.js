@@ -9,13 +9,16 @@ import { loadSkyData, skyData, updateSkyPositions, vecAt } from '../skydata.js';
 import { createOrientation } from '../compass.js';
 import { compassCorrection, nudgeOffset, isCalibrated } from '../calibration.js';
 import { store } from '../store.js';
-import { icons, esc, toast } from '../ui.js';
+import { icons, esc, toast, legendHTML } from '../ui.js';
 import { loadGroup, overheadNow } from '../satellites.js';
 import { fmtTime, fmtDayInline } from '../time.js';
 import { col, mix } from '../colors.js';
 import { loadComets, interestingComets, cometAt } from '../comets.js';
-import { loadPlanes, planeLook, kmToMi, ktToMph } from '../planes.js';
+import { loadPlanes, planeLook, kmToMi, ktToMph, altColor, altLegend } from '../planes.js';
+import { routeOf, routeLine } from '../routes.js';
+import { routeHTML } from './planes.js';
 import { rankCandidates, confidence } from '../identify.js';
+import { planeAhead, spotLook, satTrack, strokeAhead, strokeTrail, drawMarks } from '../paths.js';
 import { getLog, addToLog, removeFromLog, explain } from '../ufo.js';
 
 const A = () => globalThis.Astronomy;
@@ -38,6 +41,25 @@ let ctx, root, cv, g, W = 0, H = 0, dpr = 1, raf = 0, dirty = true, orient = nul
 // "What's this?" aiming view (S.camMode). By day it shows the camera; at night (S.scope) the camera sees
 // nothing, so it shows the live sky map with a crosshair instead.
 let video = null, stream = null, camErr = '', camCircleDeg = 10, camP = null, scanning = 0;
+// Full screen: the app's top bar and tabs are hidden and the map's own controls fade until you touch the screen.
+let fadeTimer = 0, autoFull = false, landscape = null;
+function showControls() {
+  if (!root) return;
+  root.classList.remove('ctl-fade'); clearTimeout(fadeTimer);
+  if (S.full) fadeTimer = setTimeout(() => { if (root && S.full && !S.camMode) root.classList.add('ctl-fade'); }, ctx.config.sky.fullFadeMs);
+}
+function setFull(on, auto = false) {
+  S.full = on; autoFull = on && auto;
+  document.body.classList.toggle('sky-full', on);
+  updateButtons(); showControls();
+  setTimeout(() => { if (root) resize(); }, 60);                // the map just got bigger (or smaller)
+}
+/** Turning the phone sideways goes full screen; turning it back upright leaves it (if that's how you got in). */
+function onTurn() {
+  if (!landscape || !root) return;
+  if (landscape.matches && !S.full) setFull(true, true);
+  else if (!landscape.matches && S.full && autoFull) setFull(false);
+}
 let nightWas = false, model = null, modelSec = -1, hits = [], starScr = null, lastView = null, wakeLock = null, ready = false, noData = '';
 const pointers = new Map();
 let gc = null, gg = null;
@@ -74,12 +96,19 @@ function updateModel(force) {
     const tr = Math.hypot(...tq), tp = sky.fixedPosition(((Math.atan2(tq[1], tq[0]) * DEG) + 360) % 360, Math.asin(tq[2] / tr) * DEG, date, obs);
     add({ id: cid, kind: 'comet', label: it.c.id, vec: M.azAltToVec(p.az, p.alt), tail: M.azAltToVec(tp.az, tp.alt), az: p.az, alt: p.alt, mag: st.mag, comet: it.c, st });
   }
-  const dark = sun.alt < -4;
+  const dark = sun.alt < -4, pc = ctx.config.paths;
+  const picked = (id) => (S.sel && S.sel.id === id) || S.target === id;
   const sats = [];
   if (S.layers.sats) {
     for (const s of overheadNow(ctx, l, date, ctx.config.sats.overheadMinEl)) {
       const o = { id: 'sat:' + s.id, kind: 'sat', label: s.name, vec: M.azAltToVec(s.az, s.el), az: s.az, alt: s.el, rangeKm: s.rangeKm, sunlit: s.sunlit, seen: s.sunlit && dark,
         star: ctx.config.sats.highlight.includes(s.id) };
+      // path: only for satellites worth following (visible now, the ISS, or the one you picked) — not the whole swarm
+      if (o.seen || o.star || picked(o.id)) {
+        const tr = satTrack(s.satrec, l, date, -pc.satTrailMin, pc.satAheadMin, pc.stepSec).filter(t => t.el > -2);
+        const V = (t) => ({ vec: M.azAltToVec(t.az, t.el), mark: t.mark });
+        o.behind = tr.filter(t => t.min < 0).map(V); o.ahead = tr.filter(t => t.min > 0).map(V);
+      }
       add(o); sats.push(o);
     }
   }
@@ -88,7 +117,10 @@ function updateModel(force) {
       const lk = planeLook(pl, l, date.getTime());
       if (lk.el < ctx.config.planes.minEl) continue;
       const ahead = planeLook(pl, l, date.getTime() + 20000);
-      add({ id: 'plane:' + pl.id, kind: 'plane', label: pl.call, vec: M.azAltToVec(lk.az, lk.el), next: M.azAltToVec(ahead.az, ahead.el), az: lk.az, alt: lk.el, plane: pl, look: lk });
+      const id = 'plane:' + pl.id, V = (t) => { const k = spotLook(t.lat, t.lon, t.altFt ?? lk.altFt, l); return k.el > -1 ? { vec: M.azAltToVec(k.az, k.el), mark: t.mark || 0 } : null; };
+      add({ id, kind: 'plane', label: pl.call, vec: M.azAltToVec(lk.az, lk.el), next: M.azAltToVec(ahead.az, ahead.el), az: lk.az, alt: lk.el, plane: pl, look: lk,
+        behind: ((ctx.planes.trails || {})[pl.id] || []).map(V).filter(Boolean),
+        ahead: pl.gsKt < 40 ? [] : planeAhead(pl, l, date.getTime(), picked(id) ? pc.planeAheadSelMin : pc.planeAheadMin, pc.stepSec).slice(1).map(V).filter(Boolean) });
     }
   }
   // passNow = a highlighted satellite (the ISS) that is up AND visible to the eye right now
@@ -341,15 +373,28 @@ function draw() {
     }
   }
 
-  // planes
+  // where it's going (dotted, with minute marks) and where it's been (faded) — see paths.js
+  const pathOf = (o, colr) => {
+    const here = P(o.vec), isSel = (S.sel && S.sel.id === o.id) || S.target === o.id, far = (p) => (p && onScr(p, 200) ? p : null);
+    if (o.behind && o.behind.length) strokeTrail(g, [...o.behind.map(t => far(P(t.vec))), here], colr);
+    if (!o.ahead || !o.ahead.length) return;
+    const xy = o.ahead.map(t => far(P(t.vec)));
+    strokeAhead(g, [here, ...xy], isSel ? '#ffffff' : colr, isSel ? 0.95 : 0.7);
+    drawMarks(g, o.ahead.map((t, i) => t.mark && xy[i] && { x: xy[i][0], y: xy[i][1], min: t.mark }).filter(Boolean), '#ffffff', { labels: isSel || o.star, gap: ctx.config.paths.labelGapPx });
+  };
+
+  // planes (coloured by altitude; the key shows while any are on screen)
+  let anyPlane = false;
   if (L.planes) {
     const blink = Math.floor(performance.now() / 600) % 2;
     for (const o of model.objs.values()) {
       if (o.kind !== 'plane') continue;
       const p = P(o.vec); if (!onScr(p, 30)) continue;
+      pathOf(o, altColor(o.look.altFt));
       const q = P(o.next); const ang = q ? Math.atan2(q[1] - p[1], q[0] - p[0]) : 0;
+      anyPlane = true;
       g.save(); g.translate(p[0], p[1]); g.rotate(ang);
-      g.fillStyle = col('#e9eef7');
+      g.fillStyle = col(altColor(o.look.altFt));
       g.beginPath(); g.moveTo(9, 0); g.lineTo(-6, -2); g.lineTo(-7, 0); g.lineTo(-6, 2); g.closePath(); g.fill();      // fuselage
       g.beginPath(); g.moveTo(2, 0); g.lineTo(-3, -8); g.lineTo(-5, -8); g.lineTo(-2, 0); g.lineTo(-5, 8); g.lineTo(-3, 8); g.closePath(); g.fill();  // wings
       g.fillStyle = col(blink ? '#ff4d4d' : '#3a1010'); g.fillRect(-4.5, -9, 2.2, 2.2);
@@ -370,6 +415,7 @@ function draw() {
       const p = P(o.vec);
       if (!onScr(p, 30)) continue;
       const c = o.seen ? '#5cc8ff' : '#6b7c96';
+      pathOf(o, c);
       const r = o.star ? 10 : 6;                       // highlighted satellites (the ISS) stand out from the rest
       g.strokeStyle = col(c); g.fillStyle = col(c); g.lineWidth = o.seen ? 2 : o.star ? 1.8 : 1.2;
       if (o.star && o.seen) { g.globalAlpha = 0.22; g.beginPath(); g.arc(p[0], p[1], 19, 0, 2 * Math.PI); g.fill(); g.globalAlpha = 1; }
@@ -462,6 +508,8 @@ function draw() {
   const pb = root.querySelector('#sky-pass');
   const pt = pass ? `${pass.label} pass ${S.offsetMs === 0 ? 'now' : 'at this time'} · ${sky.dirName(pass.az)}, ${Math.round(pass.alt)}° up` : '';
   if (pb.dataset.t !== pt) { pb.textContent = pt; pb.dataset.t = pt; pb.classList.toggle('hidden', !pt); }
+  const lg = root.querySelector('#sky-legend');
+  if (lg.classList.contains('hidden') === anyPlane) lg.classList.toggle('hidden', !anyPlane);
   const tl = root.querySelector('#sky-time');
   const tt = S.offsetMs === 0 ? 'Now' : `${fmtDayInline(model.date)} ${fmtTime(model.date)}`;
   if (tl.dataset.t !== tt) { tl.textContent = tt; tl.dataset.t = tt; }
@@ -497,7 +545,7 @@ function describe(id) {
   const date = model.date, obs = model.obs;
   const pos = M.vecToAzAlt(t.vec);
   const rows = [];
-  let title = t.label, sub = '';
+  let title = t.label, sub = '', extra = '';
   const rs = (name) => { const r = sky.riseSet(name, date, obs); if (r.rise) rows.push(['Rises', `${fmtDayInline(r.rise)} ${fmtTime(r.rise)}`]); if (r.set) rows.push(['Sets', `${fmtDayInline(r.set)} ${fmtTime(r.set)}`]); };
   if (id === 'sun') { sub = 'Our star — never look at it directly or through optics'; rs('Sun'); }
   else if (id === 'moon') { const m = sky.moonInfo(date, obs); sub = `${m.name} · ${Math.round(m.fraction * 100)}% lit`; rs('Moon'); if (m.nextFull) rows.push(['Next full', fmtDayInline(m.nextFull)]); }
@@ -509,12 +557,13 @@ function describe(id) {
       rows.push(['Altitude', `${Math.round(lk.altFt).toLocaleString()} ft${p.vrate > 300 ? ' · climbing' : p.vrate < -300 ? ' · descending' : ''}`]);
       rows.push(['Speed', `${Math.round(ktToMph(p.gsKt))} mph heading ${sky.dirName(p.track)}`]);
       rows.push(['Distance', `${Math.round(kmToMi(lk.rangeKm))} miles away`]);
-      if (p.reg) rows.push(['Registration', p.reg]); }
+      if (p.reg) rows.push(['Registration', p.reg]);
+      extra = routeHTML(ctx, p); }
   }
   else if (id.startsWith('comet:')) { const o = model.objs.get(id); if (o) { title = o.comet.name; sub = `Comet · about magnitude ${o.mag.toFixed(1)} (${o.mag <= 6 ? 'naked eye' : o.mag <= 9 ? 'binoculars' : 'telescope'}) · ${o.st.delta.toFixed(2)} AU away`; rows.push(['Brightness', 'a rough guess — comets surprise']); } }
   else if (id.startsWith('star:')) { const i = +id.slice(5), D = skyData(); sub = `Star · magnitude ${D.mag[i].toFixed(1)}`; if (!D.raw.names[i]) title = 'Unnamed star'; }
   else if (id.startsWith('dso:')) { const d = skyData().raw.dso[+id.slice(4)]; const kinds = { oc: 'Open cluster', gc: 'Globular cluster', g: 'Galaxy', gn: 'Nebula', pn: 'Planetary nebula', en: 'Nebula', sn: 'Supernova remnant' }; title = d[5] || d[4]; sub = `${kinds[d[3]] || 'Deep-sky object'} · ${d[4]} · mag ${d[2]}`; }
-  return { title, sub, pos, rows };
+  return { title, sub, pos, rows, extra };
 }
 
 function showInfo() {
@@ -526,7 +575,7 @@ function showInfo() {
   const pointable = !S.sel.id.startsWith('dso:');
   box.innerHTML = `<div class="si-head"><div><div class="big">${esc(d.title)}</div><div class="sub">${esc(d.sub)}</div></div><button class="x" data-back data-a="close" aria-label="Close">✕</button></div>
     <div class="si-dir">${dir}</div>
-    ${d.rows.map(r => `<div class="si-row"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}
+    ${d.rows.map(r => `<div class="si-row"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}${d.extra}
     <div class="actions"><button class="btn small" data-a="find">${S.target === S.sel.id ? 'Stop guiding' : 'Guide me to it'}</button>${pointable ? '<button class="btn ghost small" data-a="point">Finder screen</button>' : ''}</div>`;
   box.classList.remove('hidden');
 }
@@ -595,7 +644,7 @@ function openFind() {
 const candidatesAt = (fwd) => rankCandidates(ctx, model, fwd);
 
 function candLine(c) {
-  if (c.kind === 'plane') return `${c.label}${c.plane.type ? ' (' + c.plane.type + ')' : ''} · ${Math.round(c.look.altFt).toLocaleString()} ft · ${Math.round(kmToMi(c.look.rangeKm))} mi away`;
+  if (c.kind === 'plane') return `${c.label}${(() => { const e = routeOf(ctx, c.plane, { fetch: false }); return e.status === 'ok' ? ' · ' + routeLine(e) : ''; })()}${c.plane.type ? ' (' + c.plane.type + ')' : ''} · ${Math.round(c.look.altFt).toLocaleString()} ft · ${Math.round(kmToMi(c.look.rangeKm))} mi away`;
   if (c.mag != null) return `${c.label} · magnitude ${c.mag.toFixed(1)}`;
   return c.label;
 }
@@ -662,7 +711,7 @@ function openUfo(photo = null, fwdIn = null) {
   const why = (c) => c.passNow ? 'Passing over right now · ' : c.moving ? 'Moving · ' : '';
   const off = (c) => c.d < 3 ? 'Right where you’re pointing.' : `${Math.round(c.d)}° from where the phone is aimed${c.d > ctx.config.identify.sureDeg ? ' — within normal compass error' : ''}.`;
   const body = best ? `<div class="card ufo-best"><div class="eyebrow">${{ sure: 'UpSight says it’s…', probably: 'Most likely', nearest: 'Brightest thing near there' }[conf]}</div><div class="big">${esc(candLine(best))}</div>
-      <div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${why(best)}${off(best)}</div>
+      ${best.kind === 'plane' ? `<div id="ufo-route" data-plane="${esc(best.plane.id)}">${routeHTML(ctx, best.plane)}</div>` : ''}<div class="sub" style="margin-top:4px">${esc(explain(best))}</div><div class="sub" style="margin-top:4px">${why(best)}${off(best)}</div>
       <div class="actions"><button class="btn small" data-show="${esc(best.id)}">Show me</button></div></div>
     ${list.length > 1 ? `<h3 class="sect">Other possibilities</h3><div class="card">${list.slice(1, 6).map(c => `<button class="srow find" data-show="${esc(c.id)}"><span>${esc(candLine(c))}${c.moving ? ' <span class="muted">· moving</span>' : ''}</span><span class="muted">${Math.round(c.d)}°</span></button>`).join('')}</div>` : ''}`
     : `<div class="card ufo-best"><div class="eyebrow">Result</div><div class="big">🛸 Unidentified!</div>
@@ -737,6 +786,8 @@ function updateButtons() {
   if (!root) return;
   root.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
   const stop = root.querySelector('[data-a="stopguide"]'); if (stop) stop.classList.toggle('hidden', !S.target);
+  const fb = root.querySelector('[data-a="full"]');
+  if (fb) { fb.textContent = S.full ? '✕ Exit full screen' : '⛶'; fb.toggleAttribute('data-back', !!S.full); fb.setAttribute('aria-label', S.full ? 'Exit full screen' : 'Full screen'); }
 }
 
 async function startLive() {
@@ -757,6 +808,7 @@ function onClick(e) {
   }
   switch (b.dataset.a) {
     case 'layers': openLayers(); break;
+    case 'full': setFull(!S.full); break;
     case 'ufo': enterCam(); break;
     case 'camclose': exitCam(); break;
     case 'camcap': {
@@ -828,7 +880,7 @@ export const skyView = {
       <canvas id="sky-cv"></canvas>
       <div class="sky-top">
         <div class="seg"><button data-mode="live">Live</button><button data-mode="free">Drag</button></div>
-        <div class="sky-btns"><button class="chip" data-a="find">Find</button><button class="chip" data-a="layers">Layers</button></div>
+        <div class="sky-btns"><button class="chip" data-a="find">Find</button><button class="chip" data-a="layers">Layers</button><button class="chip" data-a="full" aria-label="Full screen">⛶</button></div>
       </div>
       <div class="cam-ui">
         <div class="cam-top"><span class="chip" id="cam-hint">Put the light in the circle</span><button class="chip" data-back data-a="camclose" aria-label="Close camera">✕</button></div>
@@ -841,10 +893,16 @@ export const skyView = {
       <button class="chip stop hidden" data-a="stopguide">Stop guiding</button>
       <div class="sky-zoom"><button class="chip" data-a="zin">＋</button><button class="chip" data-a="zout">－</button></div>
       <div id="sky-info" class="sky-info hidden"></div>
+      <div id="sky-legend" class="sky-legend hidden">${legendHTML(altLegend(), 'ft', col)}</div>
       <div class="sky-time"><button data-a="t" data-d="-24">−1d</button><button data-a="t" data-d="-1">−1h</button><button id="sky-time" data-a="t" data-d="now">Now</button><button data-a="t" data-d="1">+1h</button><button data-a="t" data-d="24">+1d</button></div>
     </div>`;
     root = el.querySelector('.sky-wrap'); cv = root.querySelector('#sky-cv'); g = cv.getContext('2d');
     root.addEventListener('click', onClick);
+    root.addEventListener('pointerdown', showControls, true);
+    landscape = matchMedia('(orientation: landscape) and (pointer: coarse)');       // phones and tablets only, not desktop windows
+    landscape.addEventListener('change', onTurn);
+    this._offR = ctx.bus.on('routes', () => { showInfo(); const u = document.getElementById('ufo-route'); const pl = u && ctx.planes && ctx.planes.list.find(x => x.id === u.dataset.plane); if (pl) u.innerHTML = routeHTML(ctx, pl); });
+    S.full = false; setTimeout(onTurn, 0);
     bindPointer();
     window.addEventListener('resize', resize);
     orient = createOrientation({ smoothing: 0.3, getCorrection: () => compassCorrection(ctx.location()) });
@@ -869,6 +927,8 @@ export const skyView = {
   tick() { /* animates itself */ },
   unmount() {
     mounted = false; cancelAnimationFrame(raf); exitCam();
+    clearTimeout(fadeTimer); if (landscape) landscape.removeEventListener('change', onTurn); landscape = null;
+    S.full = false; document.body.classList.remove('sky-full'); if (this._offR) this._offR();
     window.removeEventListener('resize', resize);
     if (orient) orient.stop(); orient = null;
     if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }

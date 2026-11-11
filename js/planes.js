@@ -3,6 +3,7 @@
 // plane: { id, call, type, reg, lat, lon, altFt, gsKt, track, vrate, seen }
 
 import { isNativeApp } from './platform.js';
+import { CONFIG } from './config.js';
 
 const RAD = Math.PI / 180, DEG = 180 / Math.PI, RE = 6371000, FT = 0.3048;
 
@@ -87,8 +88,10 @@ export function planeLook(p, loc, now = Date.now()) {
 export const kmToMi = (km) => km * 0.621371;
 export const ktToMph = (kt) => kt * 1.15078;
 
-/** Colour by altitude: low & slow = warm, cruising = cool. */
-export function altColor(ft) { return ft < 5000 ? '#ff9a4d' : ft < 15000 ? '#ffd27a' : ft < 28000 ? '#9fe0ff' : '#5cc8ff'; }
+/** Colour by altitude: low & slow = warm, cruising = cool (bands are in config.planes.altBands). */
+export function altColor(ft) { const b = CONFIG.planes.altBands; return (b.find(x => ft < x[0]) || b[b.length - 1])[1]; }
+/** The key for those colours: [{ color, label }]. */
+export const altLegend = () => CONFIG.planes.altBands.map(([, color, label]) => ({ color, label }));
 
 /**
  * Will this plane pass (nearly) over you soon? Straight-line guess from its heading and speed.

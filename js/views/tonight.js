@@ -8,6 +8,7 @@ import { loadSat, loadStarlink, starlinkState } from '../satellites.js';
 import { loadLaunches } from '../launches.js';
 import { loadComets } from '../comets.js';
 import { loadPlanes, overheadSoon, kmToMi } from '../planes.js';
+import { routeOf, routeLine } from '../routes.js';
 import { store } from '../store.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
@@ -204,7 +205,8 @@ function planeBanner() {
     if (x) {
       const { p, c } = x, sec = Math.round(c.inSec);
       const when = sec <= 20 ? 'overhead now' : sec < 90 ? `overhead in ${sec} s` : `overhead in ${Math.round(sec / 60)} min`;
-      html = `<button class="card tap lu-plane" data-go="passes" data-plane-chip="1"><span class="ic">✈</span><span class="grow"><span class="name">${esc(p.call)} passing ${when}</span>
+      const rl = routeLine(routeOf(ctx, p));
+      html = `<button class="card tap lu-plane" data-go="passes" data-plane-chip="1"><span class="ic">✈</span><span class="grow"><span class="name">${esc(p.call)} passing ${when}</span>${rl ? `<span class="sub">${esc(rl)}</span>` : ''}
         <span class="sub">${Math.round(p.altFt).toLocaleString()} ft${p.type ? ' · ' + esc(p.type) : ''} · look ${dirOf(c.now.az)}, ${Math.max(1, Math.round(c.now.el))}° up now · closest ${kmToMi(c.distKm).toFixed(1)} mi</span></span></button>`;
     }
   }
@@ -240,12 +242,13 @@ export const tonightView = {
     if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
     this._offC = ctx.bus.on('comets', () => render());
     this._offP = ctx.bus.on('planes', () => planeBanner());
+    this._offR = ctx.bus.on('routes', () => planeBanner());
     const poll = () => { if (store.get('planeAlerts') && document.visibilityState === 'visible') loadPlanes(ctx); };
     poll(); this._planeTimer = setInterval(poll, 20000);
     this._offL = ctx.bus.on('launches', () => render());
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
   tick() { if (!root) return; if (Date.now() - planAt > 60000) render(); else planeBanner(); },
-  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
+  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); if (this._offR) this._offR(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
 void sky;

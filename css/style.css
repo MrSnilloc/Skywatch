@@ -322,6 +322,29 @@ html.night .cam-panel { background: #180404e6; }
 .map-ctl .chip { padding: 7px 11px; font-size: 13px; }
 .map-ctl .chip.on { color: var(--good); }
 .map-attr { position: absolute; right: 6px; bottom: 3px; font-size: 9px; color: #8a96aa; text-shadow: 0 1px 2px #000; }
+/* colour key (plane altitude) */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 11.5px; color: var(--dim); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend .unit { opacity: .8; }
+.sky-legend { position: absolute; left: 10px; bottom: 58px; background: #0a1220cc; border: 1px solid var(--line); border-radius: 10px; padding: 5px 9px; backdrop-filter: blur(6px); pointer-events: none; }
+.sky-legend .legend { margin: 0; }
+html.night .sky-legend { background: #180404dd; }
+.sky-info:not(.hidden) ~ .sky-legend, .sky-wrap.cam .sky-legend { display: none; }
+/* a flight's route: airline, From → To, progress */
+.route { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.route-ends { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.route-ends > span { display: flex; flex-direction: column; } .route-ends .r { text-align: right; align-items: flex-end; }
+.route-ends b { font-size: 18px; letter-spacing: .03em; } .route-ends .arrow { color: var(--dim); font-size: 18px; }
+.route-bar { position: relative; height: 4px; border-radius: 4px; background: var(--line); margin: 12px 8px 8px; }
+.route-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.route-bar b { position: absolute; top: -9px; transform: translateX(-50%); font-size: 14px; color: var(--text); }
+/* Sky map full screen: no top bar or tabs, controls fade until touched */
+body.sky-full #top, body.sky-full #nav { display: none; }
+body.sky-full #app { max-width: none; }
+.sky-wrap .sky-top, .sky-wrap .sky-zoom, .sky-wrap .sky-time, .sky-wrap .sky-hud, .sky-wrap .sky-legend { transition: opacity .5s; }
+.sky-wrap.ctl-fade .sky-top, .sky-wrap.ctl-fade .sky-zoom, .sky-wrap.ctl-fade .sky-time, .sky-wrap.ctl-fade .sky-hud, .sky-wrap.ctl-fade .sky-legend { opacity: 0; pointer-events: none; }
+.sky-wrap.ctl-fade .sky-top > * { pointer-events: none; }
 .plane-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .plane-card .sub b { font-weight: 650; }
 .lu-plane { display: flex; gap: 12px; align-items: center; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }

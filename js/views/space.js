@@ -18,6 +18,7 @@ import { eventData } from '../events.js';
 import { toast } from '../ui.js';
 import { drawPlanet, fitZoom } from './spacePlanet.js';
 import { drawMoonFace } from './spaceMoon.js';
+import { strokeAhead, strokeTrail, drawMarks } from '../paths.js';
 import { PLANETS as PLANET_DATA, PLANET_NAMES, bestTonight } from '../moons.js';
 
 const A = () => globalThis.Astronomy;
@@ -270,15 +271,27 @@ function drawEarth(date) {
     const isSel = selId === 'sat:' + s.norad;
     if (s.kind === 'other' && !isSel) continue;
     const per = 2 * Math.PI / s.satrec.no * 60000;   // orbit period in ms
-    g.beginPath(); let pen = false;
-    for (let k = 0; k <= 90; k++) {
-      const pv = SAT().propagate(s.satrec, new Date(date.getTime() - per * 0.5 + per * k / 90));
-      if (!pv || !pv.position) { pen = false; continue; }
+    const at = (ms) => {                              // screen spot of this satellite `ms` from now (null = behind Earth)
+      const pv = SAT().propagate(s.satrec, new Date(date.getTime() + ms));
+      if (!pv || !pv.position) return null;
       const v = [pv.position.x / RE, pv.position.y / RE, pv.position.z / RE], p = P(v);
-      if (hidden(v, p)) { pen = false; continue; }
-      pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true;
+      return hidden(v, p) ? null : p;
+    };
+    const lap = []; for (let k = 0; k <= 90; k++) lap.push(at(-per * 0.5 + per * k / 90));
+    const c = isSel ? '#ffffff' : s.color;
+    if (fast) {                                        // sped up: the whole orbit as one steady line
+      g.beginPath(); let pen = false;
+      for (const p of lap) { if (!p) { pen = false; continue; } pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true; }
+      g.strokeStyle = col(c); g.globalAlpha = isSel ? 0.9 : 0.75; g.lineWidth = isSel ? 2 : 1.6; g.stroke(); g.globalAlpha = 1;
+    } else {                                           // half a lap behind (faded trail), half a lap ahead (dotted) — see paths.js
+      strokeTrail(g, lap.slice(0, 46), c, isSel ? 0.9 : 0.5, isSel ? 2 : 1.2);
+      strokeAhead(g, lap.slice(45), c, isSel ? 0.95 : 0.6, isSel ? 2 : 1.4);
+      if (isSel) {
+        const marks = [];
+        for (let m = 1; m <= ctx.config.paths.spaceMarksMin; m++) { const p = at(m * 60000); if (p) marks.push({ x: p[0], y: p[1], min: m }); }
+        drawMarks(g, marks, '#ffffff', { labels: true, gap: ctx.config.paths.labelGapPx });
+      }
     }
-    g.strokeStyle = col(isSel ? '#ffffff' : s.color); g.globalAlpha = isSel ? 0.9 : fast ? 0.75 : 0.4; g.lineWidth = isSel ? 2 : fast ? 1.6 : 1.2; g.stroke(); g.globalAlpha = 1;
     if (fast && s.kind !== 'other') {                 // name the line at its northernmost point (steady, unlike the racing dot)
       const pv = SAT().propagate(s.satrec, date);
       if (pv && pv.position) {

@@ -42,6 +42,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/satellites.js` | Tiangong, Hubble and the "brightest satellites" list (CelesTrak) |
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
 | `js/identify.js` | “What’s this?” ranking: wide search, ordered by brightness, movement and passes happening now |
+| `js/routes.js` | Flight routes from a callsign (airline, From → To, progress), cached per plane (**add a source: one entry**) |
 | `js/planes.js`, `js/ufo.js`, `js/views/planes.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
 | `js/comets.js` | Comet orbits, positions and brightness estimates |
 | `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
@@ -93,6 +94,7 @@ Browsers block the free plane feeds for websites, so live planes (map, radar, ov
 
 ## Credits
 - Aircraft: adsb.lol, airplanes.live, OpenSky Network (community ADS-B feeds).
+- Flight routes: adsb.lol (ODbL; routes from Virtual Radar Server’s public-domain list) and adsbdb.com (route data © David Taylor & Jim Mason — permission needed before publishing).
 - Launch data: The Space Devs — Launch Library 2.
 - Planet surface maps (`data/planets/`): Solar System Scope (solarsystemscope.com/textures), CC BY 4.0, based on NASA imagery; shrunk to 1024 px.
 - Moon orbits for Mars, Saturn, Uranus and Neptune: fitted from NASA/JPL Horizons.

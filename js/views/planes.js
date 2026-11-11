@@ -2,13 +2,15 @@
 //   Radar : you in the middle, rings, trails, "visible above 10°" ring, arrows on planes heading your way.
 //   Map   : dark street map with planes gliding in real time; North-up or Heading-up (turns with your phone).
 
-import { loadPlanes, planeLook, kmToMi, ktToMph, altColor, closestApproach } from '../planes.js';
+import { loadPlanes, planeLook, kmToMi, ktToMph, altColor, altLegend, closestApproach } from '../planes.js';
+import { routeOf, routeProgress, routeLine, fmtLeft } from '../routes.js';
 import { dirName } from '../sky.js';
 import { createOrientation } from '../compass.js';
 import { compassCorrection } from '../calibration.js';
 import { store } from '../store.js';
 import { col, isNight } from '../colors.js';
-import { esc } from '../ui.js';
+import { esc, legendHTML } from '../ui.js';
+import { planeAhead, strokeAhead, drawMarks } from '../paths.js';
 
 const RAD = Math.PI / 180, DEG = 180 / Math.PI;
 const V = { mode: 'map', rangeMi: 50, zoom: 9, headingUp: false, follow: 'me', center: null };   // kept between visits
@@ -41,6 +43,7 @@ export function planesHTML(c) {
       <div class="tl-top"><div class="seg small"><button data-pm="map" class="${V.mode === 'map' ? 'on' : ''}">Map</button><button data-pm="radar" class="${V.mode === 'radar' ? 'on' : ''}">Radar</button></div>
         ${V.mode === 'radar' ? `<div class="seg small">${[25, 50, 100].map(r => `<button data-range="${r}" class="${r === V.rangeMi ? 'on' : ''}">${r} mi</button>`).join('')}</div>` : ''}</div>
       <div class="pv-wrap ${V.mode}"><canvas id="pv"></canvas>${V.mode === 'map' ? mapCtl + `<div class="map-attr">${esc(ctx.config.planes.mapAttribution)}</div>` : ''}</div>
+      ${legendHTML(altLegend(), 'ft', col)}
       <div id="plane-sel"></div>
     </div>
     <div id="plane-list"></div>
@@ -70,11 +73,12 @@ function drawRadar() {
   const a = (performance.now() / 4000 % 1) * 2 * Math.PI - Math.PI / 2;
   if (g.createConicGradient) { const sw = g.createConicGradient(a - 0.6, c, c); sw.addColorStop(0, 'rgba(98,240,165,0)'); sw.addColorStop(0.095, 'rgba(98,240,165,0.22)'); sw.addColorStop(0.1, 'rgba(98,240,165,0)'); g.fillStyle = sw; g.beginPath(); g.arc(c, c, R, 0, 2 * Math.PI); g.fill(); }
   g.fillStyle = col('#62f0a5'); g.beginPath(); g.arc(c, c, 3.5, 0, 2 * Math.PI); g.fill();
-  const loc = ctx.location();
+  const loc = ctx.location(), now = Date.now();
   const toXY = (lat, lon) => { const lk = planeLook({ lat, lon, altFt: 0, gsKt: 0, track: 0, vrate: 0, seen: Date.now() }, loc); const d = kmToMi(lk.groundKm) / rangeMi * R; return [c + Math.sin(lk.az * RAD) * d, c - Math.cos(lk.az * RAD) * d]; };
   for (const { p, lk, ca } of rows(rangeMi)) {
     const d = kmToMi(lk.groundKm) / rangeMi * R, x = c + Math.sin(lk.az * RAD) * d, y = c - Math.cos(lk.az * RAD) * d;
     trail(p, (la, lo) => toXY(la, lo), [x, y], altColor(p.altFt));
+    drawMarks(g, ahead(p, toXY, now), '#ffffff', { labels: sel === p.id, gap: ctx.config.paths.labelGapPx });
     planeIcon(x, y, p.track * RAD, altColor(p.altFt), sel === p.id, 1);
     g.font = '10px system-ui'; g.fillStyle = col(sel === p.id ? '#ffffff' : '#bfe8d6');
     g.fillText(p.call + (towardYou(ca) ? ' ▸you' : ''), x + 9, y - 2); g.fillStyle = col('#6fb59a'); g.fillText(`${(Math.round(p.altFt / 100) / 10).toFixed(1)}k ft`, x + 9, y + 9);
@@ -148,14 +152,16 @@ function drawMap() {
     const lk = planeLook(p, loc, now), q = P(lk.lat, lk.lon);
     if (Math.abs(q[0]) > half || Math.abs(q[1]) > half) continue;
     trail(p, P, q, altColor(p.altFt));
+    const marks = ahead(p, P, now);
     planeIcon(q[0], q[1], p.track * RAD, altColor(p.altFt), sel === p.id, 1.15);
-    out.push({ p, q });
+    out.push({ p, q, marks });
   }
   g.restore();
   // labels drawn upright, after un-rotating
   const cs = Math.cos(rot), sn = Math.sin(rot);
-  for (const { p, q } of out) {
+  for (const { p, q, marks } of out) {
     const x = W / 2 + q[0] * cs - q[1] * sn, y = H / 2 + q[0] * sn + q[1] * cs;
+    drawMarks(g, marks.map(m => ({ min: m.min, x: W / 2 + m.x * cs - m.y * sn, y: H / 2 + m.x * sn + m.y * cs })), '#ffffff', { labels: sel === p.id, gap: ctx.config.paths.labelGapPx });
     if (x < -40 || x > W + 40 || y < -20 || y > H + 20) continue;
     if (V.zoom >= 8.5 || sel === p.id) {
       g.font = '600 10px system-ui'; g.lineWidth = 3; g.strokeStyle = '#000b';
@@ -187,6 +193,15 @@ function trail(p, P, head, color) {
   }
   g.globalAlpha = 1;
 }
+/** Dotted line ahead of a plane (longer for the one you tapped). Returns its minute marks [{ x, y, min }] for drawMarks. */
+function ahead(p, P, now) {
+  if (p.gsKt < 40) return [];
+  const c = ctx.config.paths, isSel = sel === p.id;
+  const pts = planeAhead(p, ctx.location(), now, isSel ? c.planeAheadSelMin : c.planeAheadMin, c.stepSec);
+  const xy = pts.map(t => P(t.lat, t.lon));
+  strokeAhead(g, xy, isSel ? '#ffffff' : altColor(p.altFt), isSel ? 0.95 : 0.6);
+  return pts.map((t, i) => t.mark && { x: xy[i][0], y: xy[i][1], min: t.mark }).filter(Boolean);
+}
 function planeIcon(x, y, ang, color, isSel, s) {
   g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
   g.fillStyle = col(isSel ? '#ffffff' : color);
@@ -217,6 +232,19 @@ function frame() {
 }
 
 // ---------- list + selection ----------
+/** Airline, From → To and a progress bar for one plane (asks for the route the first time it's needed). */
+export function routeHTML(c, p) {
+  const e = routeOf(c, p);
+  if (e.status === 'loading') return '<div class="route"><div class="sub">Looking up its route…</div></div>';
+  if (e.status !== 'ok') return '<div class="route"><div class="sub">Private / no route on file</div></div>';
+  const pr = routeProgress(e, p), km = pr ? pr.kmLeft : 0;
+  const bar = pr && !pr.offRoute ? `<div class="route-bar"><i style="width:${Math.round(pr.frac * 100)}%"></i><b style="left:${Math.round(pr.frac * 100)}%">✈</b></div>
+      <div class="sub">${esc([fmtLeft(pr.minLeft), `${Math.round(kmToMi(km)).toLocaleString()} mi to go`].filter(Boolean).join(' · '))}</div>`
+    : pr ? '<div class="sub" style="color:var(--warn)">It’s well off that route right now — the route on file may be out of date.</div>' : '';
+  return `<div class="route">${e.airline ? `<div class="val">${esc(e.airline)}</div>` : ''}
+    <div class="route-ends"><span><b>${esc(e.from.code)}</b><span class="sub">${esc(e.from.city)}</span></span><span class="arrow">→</span><span class="r"><b>${esc(e.to.code)}</b><span class="sub">${esc(e.to.city)}</span></span></div>${bar}</div>`;
+}
+
 function selHTML() {
   if (!sel || !ctx.planes) return '';
   const p = ctx.planes.list.find(x => x.id === sel); if (!p) return '';
@@ -226,6 +254,7 @@ function selHTML() {
   return `<div class="plane-card"><div class="si-head"><div><div class="big">${esc(p.call)}</div><div class="sub">${esc([p.desc || p.type, p.ownOp].filter(Boolean).join(' · ') || 'Aircraft')}</div></div><button class="x" data-back data-a="unsel">✕</button></div>
     <div class="sub">${Math.round(lk.altFt).toLocaleString()} ft${p.vrate > 300 ? ' ↗ climbing' : p.vrate < -300 ? ' ↘ descending' : ''} · ${Math.round(ktToMph(p.gsKt))} mph heading ${dirName(p.track)} · ${Math.round(kmToMi(lk.groundKm))} mi away</div>
     <div class="sub">${lk.el > 1 ? `In your sky: ${dirName(lk.az)}, ${Math.round(lk.el)}° up` : 'Below your horizon'}${near ? ' · <b class="good">' + esc(near) + '</b>' : ''}</div>
+    ${routeHTML(ctx, p)}
     <div class="actions"><button class="btn small" data-a="sky">Find it in the sky</button>${V.mode === 'map' ? `<button class="btn ghost small" data-a="follow">${V.follow === sel ? 'Following ✓' : 'Follow'}</button>` : ''}</div></div>`;
 }
 function drawList() {
@@ -234,7 +263,7 @@ function drawList() {
   const html = list.length ? `<div class="list">${list.slice(0, 25).map(({ p, lk, ca }) => `<button class="row tap ${sel === p.id ? 'sel' : ''}" data-plane="${p.id}">
       <span class="dot" style="--c:${altColor(p.altFt)}"></span>
       <span class="grow"><span class="name">${esc(p.call)}${p.type ? ` <span class="muted">· ${esc(p.type)}</span>` : ''}${towardYou(ca) ? ' <span class="badge good" style="margin:0 0 0 4px">toward you</span>' : ''}</span>
-      <span class="sub">${Math.round(p.altFt).toLocaleString()} ft · ${Math.round(ktToMph(p.gsKt))} mph ${dirName(p.track)}${p.ownOp ? ' · ' + esc(p.ownOp) : ''}</span></span>
+      <span class="sub">${Math.round(p.altFt).toLocaleString()} ft · ${Math.round(ktToMph(p.gsKt))} mph ${dirName(p.track)}${p.ownOp ? ' · ' + esc(p.ownOp) : ''}${(() => { const e = routeOf(ctx, p, { fetch: false }); return e.status === 'ok' ? `<br>${esc(e.from.code)} → ${esc(e.to.code)}${e.airline ? ' · ' + esc(e.airline) : ''}` : ''; })()}</span></span>
       <span class="right"><span class="val">${Math.round(kmToMi(lk.groundKm))} mi</span><span class="sub">${lk.el > 1 ? `${dirName(lk.az)} · ${Math.round(lk.el)}° up` : 'below horizon'}</span></span></button>`).join('')}</div>`
     : (ctx.planes && ctx.planes.status === 'ready' ? '<div class="card"><div class="muted">No planes in range right now.</div></div>' : '');
   if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }

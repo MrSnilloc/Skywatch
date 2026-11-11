@@ -22,6 +22,7 @@ import { fetchClouds, avgCloud, cloudVerdict } from './weather.js';
 import { fmtTime, fmtDayInline } from './time.js';
 import { issAt } from './iss.js';
 import { overheadSoon, kmToMi } from './planes.js';
+import { routeSoon, routeLine } from './routes.js';
 import { loadSat, loadStarlink, starlinkState } from './satellites.js';
 import { loadLaunches } from './launches.js';
 import { loadComets } from './comets.js';
@@ -303,8 +304,9 @@ export function initNotify(ctx) {
       if (inQuiet(new Date())) continue;
       toldPlanes.set(p.id, Date.now());
       const sec = Math.round(c.inSec);
-      notifyNow(ctx, 'planes', `✈ ${p.call || 'A plane'} overhead ${sec < 30 ? 'now' : 'in ' + (sec < 90 ? sec + ' s' : Math.round(sec / 60) + ' min')}`,
-        `${Math.round(p.altFt).toLocaleString()} ft${p.type ? ' · ' + p.type : ''} · closest ${kmToMi(c.distKm).toFixed(1)} mi`, { go: 'passes', params: { sat: 'planes' } });
+      // wait a moment for its route (airline, From → To) so the alert can say where it's going
+      routeSoon(ctx, p).then(r => { const rl = routeLine(r); notifyNow(ctx, 'planes', `✈ ${p.call || 'A plane'} overhead ${sec < 30 ? 'now' : 'in ' + (sec < 90 ? sec + ' s' : Math.round(sec / 60) + ' min')}`,
+        `${rl ? rl + ' · ' : ''}${Math.round(p.altFt).toLocaleString()} ft${p.type ? ' · ' + p.type : ''} · closest ${kmToMi(c.distKm).toFixed(1)} mi`, { go: 'passes', params: { sat: 'planes' } }); });
     }
   });
 }
