@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.24.0',
+  version: '0.26.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -48,6 +48,17 @@ export const CONFIG = {
     binoMagLimit: 9.5,       // faintest moon ordinary binoculars can show (higher number = fainter)
     binoGlareRadii: 2,       // a moon closer than this many planet-radii to its planet is lost in the glare
     binoFieldArcmin: 30,     // width of sky shown in "Through binoculars tonight" (the Moon is about 30′ wide)
+    // Real surface maps for the planet close-ups (see planetTextures.js). A missing file just means the simple painted look.
+    textures: {
+      Mercury: 'data/planets/mercury.jpg', Venus: 'data/planets/venus.jpg', Mars: 'data/planets/mars.jpg', Jupiter: 'data/planets/jupiter.jpg',
+      Saturn: 'data/planets/saturn.jpg', Uranus: 'data/planets/uranus.jpg', Neptune: 'data/planets/neptune.jpg',
+    },
+    ringTexture: 'data/planets/saturn_ring.png',
+    ringSpan: [1.16, 2.28],  // where the ring picture's inner and outer edges sit, in Saturn radii
+    textureLonShift: {},     // degrees to slide a map sideways if a feature sits at the wrong longitude, e.g. { Mars: 10 }
+    // Jupiter's Great Red Spot drifts. Sky & Telescope puts it at System II longitude 91° on June 1, 2026, moving
+    // about 1.75° a month. UPDATE lonSys2 + at ONCE A YEAR OR SO from their "Transit Times of Jupiter's Great Red Spot" page.
+    jupiterSpot: { lonSys2: 91, at: '2026-06-01T00:00:00Z', driftPerYear: 21, mapLonWest: 46 },   // mapLonWest = where the spot is in jupiter.jpg
   },
 
   identify: {               // "What's this?" (identify.js)

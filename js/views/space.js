@@ -32,8 +32,8 @@ const PLANETS = [
 const FEATURED = { iss: '#5cc8ff', css: '#ffb454', hst: '#c49bff' };
 
 // state kept between visits
-const S = { scene: 'earth', speedIdx: 0, dir: 1, hold: false, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] },
-  planet: { name: null, zoom: 1, pan: [0, 0], bino: false, binoNote: '', caption: '' },      // Solar system → one planet
+const S = { scene: 'earth', earthTurned: false, speedIdx: 0, dir: 1, hold: false, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] },
+  planet: { name: null, zoom: 1, pan: [0, 0], yaw: 0, pitch: 0, turned: false, dragging: false, bino: false, binoNote: '', caption: '' },      // Solar system → one planet
   face: { on: false, zoom: 1, yaw: 0, pitch: 0, names: true, dragging: false, caption: '', tip: '', turned: false } };   // Moon → close-up
 
 /** Which drawing is showing: 'earth' | 'moon' | 'face' | 'solar' | 'planet'. */
@@ -546,6 +546,13 @@ function frame(ts) {
   }
 }
 
+/** Earth view: swing back so your own location faces you, at normal zoom. */
+function faceHome() {
+  const loc = ctx.location();
+  S.yaw = loc.lon * RAD + SAT().gstime(simDate()); S.pitch = Math.max(-1.2, Math.min(1.2, loc.lat * RAD * 0.8));
+  S.zoom.earth = 1; S.follow = false; S.earthTurned = false;
+}
+
 function setHint() {
   const key = viewKey();
   const txt = key === 'earth' ? `${sats.length ? sats.length + ' satellites · ' : ''}${Math.abs(speed()) >= ctx.config.space.orbitLinesSpeed ? 'sped up: satellites shown as orbit lines' : 'drag to spin · pinch to zoom · tap to identify'}`
@@ -569,6 +576,8 @@ function controls() {
   // action row
   const acts = [], pn = key === 'planet' ? S.planet.pan : S.pan[key];
   if (key === 'earth' || key === 'moon') acts.push(chip('eclipse', 'Next eclipse ›'));
+  if (key === 'earth' && S.earthTurned) acts.push(chip('ecenter', '◎ Recentre'));
+  if (key === 'planet' && S.planet.turned && !S.planet.bino) acts.push(chip('precenter', '◎ Recentre'));
   if (key === 'solar') acts.push(chip('inner', S.zoom.solar > 2 ? 'All planets' : 'Inner planets'));
   if (key === 'planet') {
     if (PLANET_DATA[S.planet.name].moons.length && !S.planet.bino) acts.push(chip('pfit', S.planet.zoom < 0.7 ? 'Close-up' : 'Show moons'));
@@ -576,7 +585,7 @@ function controls() {
   }
   if (key === 'face') {
     acts.push(chip('mtonight', 'Tonight’s view'), chip('names', S.face.names ? 'Names on' : 'Names off', S.face.names));
-    if (S.face.turned) acts.push(chip('mreset', 'Face Earth'));
+    if (S.face.turned) acts.push(chip('mreset', '◎ Recentre'));
   }
   if (pn && Math.hypot(pn[0], pn[1]) >= 20) acts.push(chip('recenter', '◎ Centre'));
   root.querySelector('#sp-acts').innerHTML = acts.join('');
@@ -644,9 +653,11 @@ function onClick(e) {
   else if (a === 'follow') { S.follow = !S.follow; showInfo(); }
   else if (a === 'planet') {
     const was = S.planet.bino;
-    Object.assign(S.planet, { name: b.dataset.p || null, zoom: 1, pan: [0, 0], bino: false, binoNote: '' });
+    Object.assign(S.planet, { name: b.dataset.p || null, zoom: 1, pan: [0, 0], yaw: 0, pitch: 0, turned: false, bino: false, binoNote: '' });
     S.sel = null; showInfo(); if (was) goLive();
   }
+  else if (a === 'precenter') { Object.assign(S.planet, { yaw: 0, pitch: 0, turned: false, pan: [0, 0] }); }
+  else if (a === 'ecenter') { faceHome(); }
   else if (a === 'pfit') { S.planet.zoom = S.planet.zoom < 0.7 ? 1 : fitZoom(S.planet.name, W, H); S.planet.pan = [0, 0]; }
   else if (a === 'bino') {
     S.planet.bino = !S.planet.bino; S.sel = null; showInfo();
@@ -687,7 +698,13 @@ function bindPointer() {
     } else if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
       start.moved = true;
       const key = viewKey();
-      if (key === 'earth') { S.follow = false; S.yaw -= dx * 0.006; S.pitch = Math.max(-1.45, Math.min(1.45, S.pitch + dy * 0.006)); }
+      if (key === 'earth') { S.follow = false; S.yaw -= dx * 0.006; S.pitch = Math.max(-1.45, Math.min(1.45, S.pitch + dy * 0.006)); if (!S.earthTurned) { S.earthTurned = true; controls(); } }
+      else if (key === 'planet') {                     // fly around the planet: the surface follows your finger
+        if (S.planet.bino) return;
+        const kf = 0.9 / Math.max(40, Math.min(W, H) * 0.2 * S.planet.zoom);
+        S.planet.yaw -= dx * kf; S.planet.pitch = Math.max(-1.5, Math.min(1.5, S.planet.pitch + dy * kf)); S.planet.dragging = true;
+        if (!S.planet.turned) { S.planet.turned = true; controls(); }
+      }
       else if (key === 'face') {                       // spin the Moon: the surface follows your finger
         const kf = 0.9 / (Math.min(W, H) * 0.4 * S.face.zoom);
         S.face.yaw -= dx * kf; S.face.pitch = Math.max(-1.5, Math.min(1.5, S.face.pitch + dy * kf));
@@ -700,9 +717,9 @@ function bindPointer() {
     if (pointers.size === 1 && start && !start.moved) {
       const r = cv.getBoundingClientRect(); pickAt(e.clientX - r.left, e.clientY - r.top);
     }
-    pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null; S.face.dragging = false;
+    pointers.delete(e.pointerId); if (pointers.size < 2) lastDist = 0; start = null; S.face.dragging = false; S.planet.dragging = false;
   });
-  cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; S.face.dragging = false; });
+  cv.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); start = null; S.face.dragging = false; S.planet.dragging = false; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(zoomOf() * (e.deltaY > 0 ? 0.9 : 1.1)); }, { passive: false });
 }
 
@@ -719,9 +736,7 @@ export const spaceView = {
       <div class="sky-time" id="sp-speed"></div>
     </div>`;
     root = el.querySelector('.sp-wrap'); cv = root.querySelector('#sp-cv'); g = cv.getContext('2d');
-    if (S.yaw === null) {   // start with your side of the planet facing you
-      const loc = ctx.location(); S.yaw = loc.lon * RAD + SAT().gstime(new Date()); S.pitch = Math.max(-1.2, Math.min(1.2, loc.lat * RAD * 0.8));
-    }
+    if (S.yaw === null) faceHome();   // start with your side of the planet facing you
     if (liveMode()) S.simMs = Date.now();
     root.addEventListener('click', onClick);
     bindPointer(); resize(); window.addEventListener('resize', resize);

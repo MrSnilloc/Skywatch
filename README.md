@@ -94,6 +94,8 @@ Browsers block the free plane feeds for websites, so live planes (map, radar, ov
 ## Credits
 - Aircraft: adsb.lol, airplanes.live, OpenSky Network (community ADS-B feeds).
 - Launch data: The Space Devs — Launch Library 2.
+- Planet surface maps (`data/planets/`): Solar System Scope (solarsystemscope.com/textures), CC BY 4.0, based on NASA imagery; shrunk to 1024 px.
+- Moon orbits for Mars, Saturn, Uranus and Neptune: fitted from NASA/JPL Horizons.
 - Coastlines: Natural Earth (public domain) via world-atlas (ISC).
 - Cloud forecast: Open-Meteo.com (CC BY 4.0).
 - Star and constellation data: d3-celestial (BSD-3-Clause), derived from the Hipparcos/Yale Bright Star catalogues.

@@ -1,12 +1,15 @@
 // views/spacePlanet.js — one planet up close, with its moons (part of the Space tab's "Solar system" view).
-//   Close-up        : the planet's disc with its real phase and tilt, moons in their real places, Saturn's rings
-//                     at their true angle, and the moons' shadows on Jupiter. North is up, east is left.
+//   Close-up        : the planet's disc (a real surface map when one is installed, see planetTextures.js) with its
+//                     real phase, tilt and spin, moons in their real places, Saturn's rings at their true angle, and
+//                     the moons' shadows on Jupiter. It starts as the view from Earth (north up, east left); drag
+//                     to fly around the planet, and Recentre to come back.
 //   Binoculars mode : what you'd actually see from the backyard tonight — "up" is up in your sky, the planet is a
 //                     bright dot, and only moons bright enough (and far enough from the glare) are drawn.
 // All positions come from ../moons.js. The Space screen (space.js) owns the canvas, time and gestures and hands
 // this file a small drawing kit `k`: { g, W, H, col, label, edgeMarker, hits, night, ctx }.
 
 import { planetSystem, PLANETS } from '../moons.js';
+import { planetTexture, ringTexture } from '../planetTextures.js';
 import { dirName } from '../sky.js';
 import { fmtTime } from '../time.js';
 
@@ -40,12 +43,20 @@ function surface(name, lat) {
   }
 }
 
+/** The viewer: starts looking from Earth (north up), then turned by the user's drag (st.yaw, st.pitch). */
+function camera(sys, st) {
+  const up0 = sys.north, d0 = sys.toEarth, r0 = cross(up0, d0);
+  const d1 = mixv(d0, r0, Math.cos(st.yaw), Math.sin(st.yaw)), right = cross(up0, d1);
+  return { d: mixv(d1, up0, Math.cos(st.pitch), Math.sin(st.pitch)), up: mixv(up0, d1, Math.cos(st.pitch), -Math.sin(st.pitch)), right };
+}
+
 let disc = null, discG = null, discKey = '';
-/** Render the lit disc into a small off-screen picture (north up, west right). Re-used while nothing changes. */
-function renderDisc(sys, n, night) {
-  const west = sys.east.map(c => -c), v3 = (v) => [dot(v, west), dot(v, sys.north), dot(v, sys.toEarth)];
-  const sun = v3(sys.sunDir), pole = v3(sys.pole);
-  const key = [sys.name, n, night, ...sun.map(c => c.toFixed(3)), ...pole.map(c => c.toFixed(3))].join(',');
+/** Render the lit globe into a small off-screen picture as the camera sees it. Re-used while nothing changes. */
+function renderDisc(sys, cam, n, night) {
+  const tex = planetTexture(sys.name), lon0 = mapShift(sys.name, sys.date) / 360;
+  const body = (v) => [dot(v, sys.xb), dot(v, sys.yb), dot(v, sys.pole)];       // into the planet's own axes
+  const R = body(cam.right), U = body(cam.up), D = body(cam.d), S = body(sys.sunDir);
+  const key = [sys.name, n, night, !!tex, ...R, ...U, ...S].map(v => (typeof v === 'number' ? v.toFixed(3) : v)).join(',');
   if (key === discKey) return disc;
   if (!disc || disc.width !== n) { disc = document.createElement('canvas'); disc.width = disc.height = n; discG = disc.getContext('2d'); }
   const img = discG.createImageData(n, n), d = img.data;
@@ -53,17 +64,40 @@ function renderDisc(sys, n, night) {
     const u = (i + 0.5) / n * 2 - 1, w = 1 - (j + 0.5) / n * 2, rr = u * u + w * w, q = (j * n + i) * 4;
     if (rr > 1) { d[q + 3] = 0; continue; }
     const z = Math.sqrt(1 - rr);
-    const l = u * sun[0] + w * sun[1] + z * sun[2];
-    const lat = Math.asin(Math.max(-1, Math.min(1, u * pole[0] + w * pole[1] + z * pole[2]))) / RAD;
-    const lit = Math.max(0, Math.min(1, (l + 0.02) / 0.1)) * (0.35 + 0.65 * Math.max(0, l)) * (0.6 + 0.4 * z);
-    const c = surface(sys.name, lat), f = 0.03 + 0.97 * lit;
-    let r = c[0] * f, gg = c[1] * f, b = c[2] * f;
-    if (night) { const L = 0.3 * r + 0.55 * gg + 0.15 * b; r = L * 1.1; gg = L * 0.12; b = L * 0.08; }
-    d[q] = r; d[q + 1] = gg; d[q + 2] = b; d[q + 3] = rr > 0.97 ? 255 * (1 - rr) / 0.03 : 255;
+    const x = u * R[0] + w * U[0] + z * D[0], y = u * R[1] + w * U[1] + z * D[1], zz = u * R[2] + w * U[2] + z * D[2];
+    const l = x * S[0] + y * S[1] + zz * S[2], sinLat = Math.max(-1, Math.min(1, zz));
+    const lit = Math.max(0, Math.min(1, (l + 0.02) / 0.1)) * (0.4 + 0.6 * Math.max(0, l)) * (0.62 + 0.38 * z);
+    let c;
+    if (tex) {                                           // look the spot up on the real map (4 nearest dots blended)
+      let fu = (Math.atan2(y, x) / (2 * Math.PI) + 0.5 + lon0) % 1; if (fu < 0) fu += 1;
+      const fx = fu * tex.w - 0.5, fy = Math.max(0, Math.min(tex.h - 1.001, (0.5 - Math.asin(sinLat) / Math.PI) * tex.h - 0.5));
+      const i0 = Math.floor(fx), j0 = Math.floor(fy), tx = fx - i0, ty = fy - j0;
+      const a = (j0 * tex.w + ((i0 % tex.w) + tex.w) % tex.w) * 4, b = (j0 * tex.w + (i0 + 1) % tex.w) * 4, a2 = a + tex.w * 4, b2 = b + tex.w * 4, t = tex.data;
+      const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+      c = [t[a] * w00 + t[b] * w10 + t[a2] * w01 + t[b2] * w11, t[a + 1] * w00 + t[b + 1] * w10 + t[a2 + 1] * w01 + t[b2 + 1] * w11, t[a + 2] * w00 + t[b + 2] * w10 + t[a2 + 2] * w01 + t[b2 + 2] * w11];
+    } else c = surface(sys.name, Math.asin(sinLat) / RAD);
+    const f = 0.025 + 0.975 * lit * (tex ? 1.12 : 1);
+    let r = Math.min(255, c[0] * f), gg = Math.min(255, c[1] * f), b3 = Math.min(255, c[2] * f);
+    if (night) { const L = 0.3 * r + 0.55 * gg + 0.15 * b3; r = L * 1.1; gg = L * 0.12; b3 = L * 0.08; }
+    d[q] = r; d[q + 1] = gg; d[q + 2] = b3; d[q + 3] = rr > 0.97 ? 255 * (1 - rr) / 0.03 : 255;
   }
   discG.putImageData(img, 0, 0); discKey = key;
   return disc;
 }
+let spaceCfg = null;
+/** Where the Great Red Spot is now (System II west longitude, degrees): it drifts steadily, so start from a known date. */
+export function redSpotLon(cfg, date) {
+  const s = cfg.jupiterSpot;
+  return s.lonSys2 + s.driftPerYear * (date.getTime() - Date.parse(s.at)) / (365.25 * 86400000);
+}
+/** How far to slide a planet's map sideways (degrees) so its features sit at their true longitudes. */
+function mapShift(name, date) {
+  if (!spaceCfg) return 0;
+  const extra = spaceCfg.textureLonShift[name] || 0;
+  return name === 'Jupiter' ? redSpotLon(spaceCfg, date) - spaceCfg.jupiterSpot.mapLonWest + extra : extra;
+}
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const mixv = (a, b, ca, cb) => [a[0] * ca + b[0] * cb, a[1] * ca + b[1] * cb, a[2] * ca + b[2] * cb];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // ---------- shared: info text ----------
@@ -94,21 +128,32 @@ export function drawPlanet(k, st, date) {
   const { g, W, H, col } = k, cfg = k.ctx.config.space;
   const sys = planetSystem(st.name, date, k.ctx.location());
   if (st.bino) return drawBinoculars(k, st, sys, date);
-  const R = Math.min(W, H) * 0.2 * st.zoom, cx = W / 2 + st.pan[0], cy = H / 2 + st.pan[1];
-  const S2 = (x, y) => [cx - x * R, cy - y * R];                     // sky offsets (planet radii) -> screen; east is left
-  const pa = sys.poleAngle * RAD, B = sys.ringTilt * RAD, flat = 1 - sys.info.flat * Math.cos(B) ** 2;
+  spaceCfg = cfg; sys.date = date;
+  const cam = camera(sys, st), turned = Math.abs(st.yaw) > 0.02 || Math.abs(st.pitch) > 0.02;
+  const R = Math.min(W, H) * 0.2 * st.zoom, cx = W / 2, cy = H / 2;
+  /** A point in space (km from the planet's centre) -> where it is on screen, and how far toward the viewer. */
+  const proj = (km) => ({ x: cx + dot(km, cam.right) / sys.radiusKm * R, y: cy - dot(km, cam.up) / sys.radiusKm * R, z: dot(km, cam.d) / sys.radiusKm });
+  // how the planet's north pole and equator sit as this camera sees them (for the squashed shape and the rings)
+  const pa = Math.atan2(-dot(sys.pole, cam.right), dot(sys.pole, cam.up)), B = Math.asin(Math.max(-1, Math.min(1, dot(sys.pole, cam.d))));
+  const flat = 1 - sys.info.flat * Math.cos(B) ** 2;
 
   const ringHalf = (front) => {
     if (!sys.info.rings) return;
     g.save(); g.translate(cx, cy); g.rotate(-pa);
     const nearDown = B >= 0;                                        // north face showing: the near half hangs below centre
     g.beginPath(); g.rect(-W * 4, (front === nearDown) ? 0 : -H * 4, W * 8, H * 4); g.clip();
-    for (const [r0, r1, op] of sys.info.rings) {
-      g.beginPath();
-      g.ellipse(0, 0, r1 * R, Math.max(0.5, r1 * R * Math.abs(Math.sin(B))), 0, 0, 2 * Math.PI);
-      g.ellipse(0, 0, r0 * R, Math.max(0.3, r0 * R * Math.abs(Math.sin(B))), 0, 0, 2 * Math.PI);
-      g.globalAlpha = op * (front ? 1 : 0.85); g.fillStyle = col('#e2d0a0'); g.fill('evenodd');
-    }
+    const sb = Math.abs(Math.sin(B)), annulus = (r0, r1) => { g.beginPath(); g.ellipse(0, 0, r1 * R, Math.max(0.4, r1 * R * sb), 0, 0, 2 * Math.PI); g.ellipse(0, 0, r0 * R, Math.max(0.3, r0 * R * sb), 0, 0, 2 * Math.PI); g.fill('evenodd'); };
+    const rt = ringTexture();
+    if (rt) {                                                       // real ring picture: a strip from inner edge to outer edge
+      const [rin, rout] = cfg.ringSpan, steps = Math.max(24, Math.min(110, Math.round((rout - rin) * R / 1.5))), row = Math.floor(rt.h / 2) * rt.w;
+      for (let q = 0; q < steps; q++) {
+        const p = (row + Math.min(rt.w - 1, Math.floor((q + 0.5) / steps * rt.w))) * 4, al = rt.data[p + 3] / 255;
+        if (al < 0.03) continue;
+        const hex = '#' + [0, 1, 2].map(c => rt.data[p + c].toString(16).padStart(2, '0')).join('');
+        g.globalAlpha = al * (front ? 1 : 0.9); g.fillStyle = col(hex);
+        annulus(rin + (rout - rin) * q / steps, rin + (rout - rin) * (q + 1) / steps + 0.004);
+      }
+    } else for (const [r0, r1, op] of sys.info.rings) { g.globalAlpha = op * (front ? 1 : 0.85); g.fillStyle = col('#e2d0a0'); annulus(r0, r1); }
     g.globalAlpha = 1; g.restore();
   };
   // name tags never sit on top of each other: a tag that would overlap is nudged down a line
@@ -119,7 +164,7 @@ export function drawPlanet(k, st, date) {
     tags.push([x, y, w]); k.label(text, x, y, color, font);
   };
   const drawMoon = (m) => {
-    const [x, y] = S2(m.x, m.y), r = Math.max(2, m.radiusKm / sys.radiusKm * R), c = MOON_COLOR[m.name] || '#e4e0d6';
+    const { x, y } = m.scr, r = Math.max(2, m.radiusKm / sys.radiusKm * R), c = MOON_COLOR[m.name] || '#e4e0d6';
     const on = x > 6 && x < W - 6 && y > 150 && y < H - 70;
     if (!on) {                                                      // off-screen: an arrow at the edge pointing its way
       const dx = x - W / 2, dy = y - H / 2, f = Math.min((W / 2 - 16) / Math.max(1e-6, Math.abs(dx)), (H / 2 - 110) / Math.max(1e-6, Math.abs(dy)));
@@ -131,34 +176,41 @@ export function drawPlanet(k, st, date) {
     if (m.state === 'eclipsed') { g.strokeStyle = col('#7d8798'); g.lineWidth = 1; g.beginPath(); g.arc(x, y, r + 1, 0, 2 * Math.PI); g.stroke(); tag(m.name + ' (in shadow)', x + r + 5, y + 4, '#7d8798', '10px system-ui'); }
     else {
       g.fillStyle = col(c); g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-      if (m.state === 'transit') { g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); }
+      if (m.scr.z > 0 && m.onDisc) { g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); }
       tag(m.name, x + r + 5, y + 4, c);
     }
     k.hits.push({ x, y, pri: 12, id: 'pm:' + m.name, info: () => ({ title: m.name, lines: moonLines(sys, withPeriod(m), cfg) }) });
   };
 
+  // where each moon is for THIS camera (which may have been turned away from the Earth view)
+  const moons = sys.moons.map(m => { const scr = proj(m.km); return { ...m, scr, onDisc: Math.hypot(scr.x - cx, scr.y - cy) < R }; });
   ringHalf(false);
-  for (const m of sys.moons) if (m.z <= 0 && m.state !== 'behind') drawMoon(m);
+  for (const m of moons) if (m.scr.z <= 0 && !m.onDisc) drawMoon(m);
   // the planet
-  const n = Math.max(48, Math.min(280, Math.round(R * 1.2)));
+  const n = Math.max(48, Math.min(st.dragging ? 170 : 300, Math.round(R * 1.25)));
   g.save(); g.translate(cx, cy); g.rotate(-pa); g.scale(1, flat); g.rotate(pa);
-  g.imageSmoothingEnabled = true; g.drawImage(renderDisc(sys, n, k.night), -R, -R, 2 * R, 2 * R); g.restore();
+  g.imageSmoothingEnabled = true; g.drawImage(renderDisc(sys, cam, n, k.night), -R, -R, 2 * R, 2 * R); g.restore();
   // moon shadows on the cloud tops
-  for (const m of sys.moons) if (m.shadow) {
-    const [x, y] = S2(m.shadow.x, m.shadow.y), r = Math.max(2, m.radiusKm / sys.radiusKm * R * 1.1);
-    g.fillStyle = '#000'; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
-    if (R > 60) k.label(m.name + '’s shadow', x + r + 4, y - r - 3, '#c9d3e6', '10px system-ui');
-    k.hits.push({ x, y, pri: 8, id: 'ps:' + m.name, info: () => ({ title: `${m.name}’s shadow`, lines: [`${m.name} is between ${sys.name} and the Sun, so its shadow falls on the planet.`, 'Standing in that spot you would see a total solar eclipse.'] }) });
+  for (const m of moons) if (m.shadowKm) {
+    const p = proj(m.shadowKm); if (p.z <= 0.05) continue;
+    const r = Math.max(2, m.radiusKm / sys.radiusKm * R * 1.1);
+    g.fillStyle = '#000'; g.beginPath(); g.arc(p.x, p.y, r, 0, 2 * Math.PI); g.fill();
+    if (R > 60) k.label(m.name + '’s shadow', p.x + r + 4, p.y - r - 3, '#c9d3e6', '10px system-ui');
+    k.hits.push({ x: p.x, y: p.y, pri: 8, id: 'ps:' + m.name, info: () => ({ title: `${m.name}’s shadow`, lines: [`${m.name} is between ${sys.name} and the Sun, so its shadow falls on the planet.`, 'Standing in that spot you would see a total solar eclipse.'] }) });
   }
   ringHalf(true);
-  for (const m of sys.moons) if (m.z > 0) drawMoon(m);
+  for (const m of moons) if (m.scr.z > 0) drawMoon(m);
   k.hits.push({ x: cx, y: cy, pri: Math.min(22, R * 0.5), id: 'planet:' + sys.name, info: () => ({ title: sys.name, lines: planetLines(sys) }) });
 
   // caption
   const hidden = sys.moons.filter(m => m.state === 'behind').map(m => m.name);
   const shadows = sys.moons.filter(m => m.shadow).map(m => m.name);
+  let spot = '';
+  if (sys.name === 'Jupiter') { const off = ((sys.centralMeridian - redSpotLon(cfg, date) + 540) % 360) - 180; spot = Math.abs(off) < 55 ? ' · Great Red Spot facing Earth' : ' · Great Red Spot on the far side'; }
+  st.turned = turned;
   st.caption = `${Math.round(sys.phaseFraction * 100)}% lit · ${(sys.arcsecRadius * 2).toFixed(0)}″ across` +
-    (shadows.length ? ` · shadow on the planet: ${shadows.join(', ')}` : '') + (hidden.length ? ` · behind the planet: ${hidden.join(', ')}` : '') + ' · north up, east left';
+    spot + (shadows.length ? ` · shadow on the planet: ${shadows.join(', ')}` : '') + (hidden.length ? ` · behind the planet (from Earth): ${hidden.join(', ')}` : '') +
+    (turned ? '\nYou’ve flown around it — tap Recentre for the view from Earth' : ' · north up, east left · drag to fly around');
 }
 
 // ---------- "Through binoculars tonight" ----------

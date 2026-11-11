@@ -1,6 +1,6 @@
 {
   "name": "skywatch-android",
-  "version": "0.24.0",
+  "version": "0.26.0",
   "private": true,
   "description": "Sky Watch as an installable Android app (Capacitor wrapper around the web app in the folder above).",
   "dependencies": {

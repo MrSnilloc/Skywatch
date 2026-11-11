@@ -89,8 +89,14 @@ export function planetSystem(name, date, loc = null) {
   const east = norm(cross([0, 0, 1], j)), north = cross(j, east);
   const then = new Date(date.getTime() - distAu * 499.004784 * 1000);          // light left the planet this long ago
   const sunDir = norm(arr(a.HelioVector(name, then)).map(c => -c));
-  let pole = [0, 0, 1];
-  try { const ax = a.RotationAxis(name, then); pole = norm(arr(ax.north)); } catch (e) { /* older library: celestial north */ }
+  let pole = [0, 0, 1], spin = 0;
+  try { const ax = a.RotationAxis(name, then); pole = norm(arr(ax.north)); spin = ax.spin; } catch (e) { /* older library: celestial north */ }
+  // Jupiter's clouds don't turn as one piece. The Great Red Spot keeps (almost) fixed in "System II", the rotation
+  // rate of the middle latitudes, so Jupiter's map is turned at that rate rather than the deep-interior rate.
+  if (name === 'Jupiter') spin = 43.3 + 870.270 * (then.getTime() / 86400000 + 2440587.5 + TDB_MINUS_UTC / 86400 - 2451545.0);
+  // the planet's own axes: xb points out of longitude 0 on its equator (it turns with the planet), pole = its north
+  const node = norm(cross([0, 0, 1], pole)), pn = cross(pole, node), sw = spin * RAD;
+  const xb = node.map((c, i) => c * Math.cos(sw) + pn[i] * Math.sin(sw)), yb = cross(pole, xb);
   const R = P.radiusKm, ill = a.Illumination(name, date);
   const sky2 = (v) => ({ x: dot(v, east) / R, y: dot(v, north) / R, z: dot(v, toEarth) / R });
 
@@ -102,17 +108,20 @@ export function planetSystem(name, date, loc = null) {
     let state = 'visible';
     if (onDisc) state = p.z > 0 ? 'transit' : 'behind';
     else if (ms < 0 && pd < R) state = 'eclipsed';                             // inside the planet's shadow
-    let shadow = null;
+    let shadow = null, shadowKm = null;
     if (ms > 0 && pd < R) {                                                    // its shadow lands on the planet
       const q = perp.map((c, i) => c + sunDir[i] * Math.sqrt(R * R - pd * pd));
+      shadowKm = q;
       if (dot(q, toEarth) > 0) shadow = { x: dot(q, east) / R, y: dot(q, north) / R };
     }
-    return { ...m, ...p, km, distKm: Math.hypot(...km), sep: Math.hypot(p.x, p.y), state, shadow };
+    return { ...m, ...p, km, distKm: Math.hypot(...km), sep: Math.hypot(p.x, p.y), state, shadow, shadowKm };
   });
 
   const out = {
     name, info: P, distAu, radiusKm: R, arcsecRadius: Math.atan(R / (distAu * AU)) * DEG * 3600,
-    toEarth, east, north, sunDir, pole, mag: ill.mag, phaseFraction: ill.phase_fraction, moons,
+    toEarth, east, north, sunDir, pole, xb, yb,
+    centralMeridian: ((-Math.atan2(dot(toEarth, yb), dot(toEarth, xb)) * DEG) % 360 + 360) % 360,   // west longitude facing Earth
+    mag: ill.mag, phaseFraction: ill.phase_fraction, moons,
     ringTilt: Math.asin(Math.max(-1, Math.min(1, dot(pole, toEarth)))) * DEG,       // + = we see the north face
     poleAngle: Math.atan2(dot(pole, east), dot(pole, north)) * DEG,                 // tilt of the planet's north on the sky
   };

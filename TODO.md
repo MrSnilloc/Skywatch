@@ -99,6 +99,18 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   build time, not by the app). Add JPL to the credits screen.
 - None of #4, #5, #8, #9, #11 is ticked: all wait for the owner's phone test.
 
+## Planet look (owner feedback 2026-11-11: painted planets don't look good, Jupiter has no Great Red Spot)
+- **BUILT in v0.25:** drag to fly around a planet + "◎ Recentre" chip (also on Earth and the Moon close-up);
+  real-image support (`js/planetTextures.js`, file list in `config.space.textures`). With no image files present
+  the old painted look is used, so the app still works.
+- **DONE in v0.26:** the 8 images are in `data/planets/` (Solar System Scope, CC BY 4.0, shrunk to 1024 px,
+  420 KB total; credit added to the README — also needed on the future credits screen). Jupiter's map turns at
+  the Great Red Spot's rate and is lined up with Sky & Telescope's position (91° on 2026-06-01, +1.75°/month) in
+  `config.space.jupiterSpot` — refresh that once a year. Central-meridian maths checked against Meeus (0.1°).
+- Seen in a browser: Jupiter (spot visible), Saturn, Mars. NOT looked at yet: Mercury, Venus, Uranus, Neptune,
+  Saturn's ring picture at a wide tilt, red night mode. Other planets' maps are assumed centred on longitude 0;
+  if a feature looks misplaced use `config.space.textureLonShift`. Waiting for the owner's phone test.
+
 ## ON HOLD (don't build — just kept here)
 - 3D spacecraft models (NASA 3D Resources — check license terms).
 - A Learning tab with lessons about the Moon, planets and stars.
