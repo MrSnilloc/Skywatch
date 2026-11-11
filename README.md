@@ -46,6 +46,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/views/space.js`, `data/land.json`, `js/colors.js` | Space tab (globe, Moon, planets), coastlines, shared canvas colours |
 | `js/events.js` | Eclipses, special Moons, planet events — pure calculations |
 | `js/targets.js` | Everything the finder can aim at |
+| `js/back.js` | Android Back button: close sheet/popup → Look Up → exit |
 | `js/views/*.js` | The screens (Tonight, Sky, Passes, Events, Point, Settings) |
 | `css/style.css` | Look and feel (colours are variables at the top) |
 
@@ -53,6 +54,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 - **New screen** (e.g. Meteor Showers, Launches): copy `js/views/tonight.js`, change `id`/`title`, add it to the list in `js/views/index.js`. The bottom bar adds a button automatically.
 - **New meteor shower**: add one entry to the list at the top of `js/showers.js`.
 - **New thing to aim at** (e.g. a bright star, Tiangong): add a provider to `js/targets.js`. It then appears as a chip on the Point screen.
+- **New popup that Back should close**: put `data-back` on its close button (see `js/back.js`). Sheets need nothing.
 - **New setting**: add one line to `SECTIONS` in `js/views/settings.js`, and a default in `js/config.js`.
 - **Alerts that fire with the app closed**: this web version uses calendar reminders. True background alerts need the Capacitor wrapper (planned next step).
 

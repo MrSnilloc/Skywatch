@@ -10,6 +10,7 @@ import { icons } from './ui.js';
 import { initSats, recomputeLoaded } from './satellites.js';
 import { isNativeApp } from './platform.js';
 import { initNotify } from './notify.js';
+import { initBack } from './back.js';
 
 const ctx = {
   config: CONFIG,
@@ -115,6 +116,7 @@ const startId = (location.hash || '').replace('#', '');
 go(views.some(v => v.id === startId) ? startId : views[0].id);
 refreshIss(ctx);
 initNotify(ctx);
+initBack({ currentId: () => current && current.id, homeId: views[0].id, go });
 
 setInterval(() => {
   if (current && current.tick) current.tick(ctx);

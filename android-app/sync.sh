@@ -7,7 +7,9 @@ sh copy-web.sh
 npx cap sync android >/dev/null
 rm -rf capacitor-android && cp -r node_modules/@capacitor/android/capacitor capacitor-android
 rm -rf plugins && mkdir -p plugins
+cp -r node_modules/@capacitor/app/android plugins/app
 cp -r node_modules/@capacitor/local-notifications/android plugins/local-notifications
 sed -i "s#new File('../node_modules/@capacitor/android/capacitor')#new File('../capacitor-android')#" android/capacitor.settings.gradle
 sed -i "s#new File('../node_modules/@capacitor/local-notifications/android')#new File('../plugins/local-notifications')#" android/capacitor.settings.gradle
+sed -i "s#new File('../node_modules/@capacitor/app/android')#new File('../plugins/app')#" android/capacitor.settings.gradle
 echo synced

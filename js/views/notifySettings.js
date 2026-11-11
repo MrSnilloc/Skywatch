@@ -37,7 +37,7 @@ export async function openNotifySettings(ctx, onBack) {
   const status = native && perm === 'granted' && st ? `<p class="foot">${st.count} alert${st.count === 1 ? '' : 's'} lined up${st.next ? ` · next: ${esc(st.next.title)}, ${fmtDayInline(new Date(st.next.at))} ${fmtTime(new Date(st.next.at))}` : ''}</p>` : '';
 
   sheet.innerHTML = `<div class="sheet-card">
-    <div class="sheet-head"><button class="btn ghost small" data-act="back">‹ Settings</button><h2>Notifications</h2><span style="width:70px"></span></div>
+    <div class="sheet-head"><button class="btn ghost small" data-back data-act="back">‹ Settings</button><h2>Notifications</h2><span style="width:70px"></span></div>
     ${banner}
     ${groups.map(g => `<h3 class="sect">${esc(g)}</h3><div class="card list-in">${types.filter(t => t.group === g).map(rowHTML).join('')}</div>`).join('')}
     <h3 class="sect">Quiet hours</h3>

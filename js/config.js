@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.19.0',
+  version: '0.20.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {

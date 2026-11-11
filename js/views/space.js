@@ -529,7 +529,7 @@ function showInfo() {
   if (!inf) { box.classList.add('hidden'); return; }
   S.sel.last = inf;
   const hiddenNote = h ? '' : '<div class="sub" style="margin-top:3px;color:var(--warn)">Behind Earth right now — it’ll come back around</div>';
-  box.innerHTML = `<div class="si-head"><div class="big">${esc(inf.title)}</div><button class="x" data-a="close">✕</button></div>${inf.lines.map(l => `<div class="sub" style="margin-top:3px">${esc(l)}</div>`).join('')}${hiddenNote}
+  box.innerHTML = `<div class="si-head"><div class="big">${esc(inf.title)}</div><button class="x" data-back data-a="close">✕</button></div>${inf.lines.map(l => `<div class="sub" style="margin-top:3px">${esc(l)}</div>`).join('')}${hiddenNote}
     ${inf.follow ? `<div class="actions"><button class="btn small ${S.follow ? '' : 'ghost'}" data-a="follow">${S.follow ? 'Following ✓' : 'Follow it'}</button></div>` : ''}`;
   box.classList.remove('hidden');
 }

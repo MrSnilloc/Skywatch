@@ -223,7 +223,7 @@ function selHTML() {
   const loc = ctx.location(), lk = planeLook(p, loc), ca = closestApproach(p, loc);
   const near = ca && ca.approaching && ca.distKm < 8 && ca.inSec < 1200
     ? `Heading your way — passes within ${kmToMi(ca.distKm).toFixed(1)} mi in ${Math.max(1, Math.round(ca.inSec / 60))} min` : '';
-  return `<div class="plane-card"><div class="si-head"><div><div class="big">${esc(p.call)}</div><div class="sub">${esc([p.desc || p.type, p.ownOp].filter(Boolean).join(' · ') || 'Aircraft')}</div></div><button class="x" data-a="unsel">✕</button></div>
+  return `<div class="plane-card"><div class="si-head"><div><div class="big">${esc(p.call)}</div><div class="sub">${esc([p.desc || p.type, p.ownOp].filter(Boolean).join(' · ') || 'Aircraft')}</div></div><button class="x" data-back data-a="unsel">✕</button></div>
     <div class="sub">${Math.round(lk.altFt).toLocaleString()} ft${p.vrate > 300 ? ' ↗ climbing' : p.vrate < -300 ? ' ↘ descending' : ''} · ${Math.round(ktToMph(p.gsKt))} mph heading ${dirName(p.track)} · ${Math.round(kmToMi(lk.groundKm))} mi away</div>
     <div class="sub">${lk.el > 1 ? `In your sky: ${dirName(lk.az)}, ${Math.round(lk.el)}° up` : 'Below your horizon'}${near ? ' · <b class="good">' + esc(near) + '</b>' : ''}</div>
     <div class="actions"><button class="btn small" data-a="sky">Find it in the sky</button>${V.mode === 'map' ? `<button class="btn ghost small" data-a="follow">${V.follow === sel ? 'Following ✓' : 'Follow'}</button>` : ''}</div></div>`;

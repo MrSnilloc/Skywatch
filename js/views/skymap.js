@@ -496,7 +496,7 @@ function showInfo() {
   if (!d) { box.classList.add('hidden'); return; }
   const dir = `${sky.dirName(d.pos.az)} ${Math.round(d.pos.az)}° · ${d.pos.alt >= 0 ? Math.round(d.pos.alt) + '° up' : 'below horizon (' + Math.round(-d.pos.alt) + '° down)'}`;
   const pointable = !S.sel.id.startsWith('dso:');
-  box.innerHTML = `<div class="si-head"><div><div class="big">${esc(d.title)}</div><div class="sub">${esc(d.sub)}</div></div><button class="x" data-a="close" aria-label="Close">✕</button></div>
+  box.innerHTML = `<div class="si-head"><div><div class="big">${esc(d.title)}</div><div class="sub">${esc(d.sub)}</div></div><button class="x" data-back data-a="close" aria-label="Close">✕</button></div>
     <div class="si-dir">${dir}</div>
     ${d.rows.map(r => `<div class="si-row"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}
     <div class="actions"><button class="btn small" data-a="find">${S.target === S.sel.id ? 'Stop guiding' : 'Guide me to it'}</button>${pointable ? '<button class="btn ghost small" data-a="point">Finder screen</button>' : ''}</div>`;
@@ -836,7 +836,7 @@ export const skyView = {
         <div class="sky-btns"><button class="chip" data-a="find">Find</button><button class="chip" data-a="layers">Layers</button></div>
       </div>
       <div class="cam-ui">
-        <div class="cam-top"><span class="chip" id="cam-hint">Put the light in the circle</span><button class="chip" data-a="camclose" aria-label="Close camera">✕</button></div>
+        <div class="cam-top"><span class="chip" id="cam-hint">Put the light in the circle</span><button class="chip" data-back data-a="camclose" aria-label="Close camera">✕</button></div>
         <div class="cam-panel"><div class="sub" style="margin-bottom:8px">See something odd? Hold it in the circle and ask.</div><button class="btn cam-go" data-a="camcap">🔍 What’s this?</button></div>
       </div>
 
