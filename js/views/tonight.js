@@ -269,4 +269,3 @@ export const tonightView = {
   tick() { if (!root) return; if (Date.now() - planAt > 60000) render(); else planeBanner(); },
   unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); if (this._offR) this._offR(); if (this._offA) this._offA(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
-void sky;

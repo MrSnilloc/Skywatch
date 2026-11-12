@@ -1,13 +1,12 @@
 // views/events.js — the sky calendar: Eclipses | Moon | Planets | Showers, all worked out for YOUR location.
 
-import * as ev from '../events.js';
 import { eventData } from '../events.js';
 import { loadLaunches, assess } from '../launches.js';
 import { loadComets, interestingComets, verdict, bestTonight } from '../comets.js';
 import * as sky from '../sky.js';
 import { showersView } from './showers.js';
 import { eventsToICS, downloadICS } from '../ics.js';
-import { fmtTime, fmtDay, fmtDate, fmtCountdown } from '../time.js';
+import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, toast, moonSVG } from '../ui.js';
 
 let root, body, ctx, section = 'eclipses', onlyVisible = false, sub = null;
@@ -276,4 +275,3 @@ export const eventsView = {
   },
   unmount() { leaveSub(); if (root) root.removeEventListener('click', onClick); if (this._off) this._off(); if (this._offC) this._offC(); root = null; },
 };
-void fmtDate; void fmtCountdown;

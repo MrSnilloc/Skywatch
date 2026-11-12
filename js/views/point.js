@@ -7,7 +7,7 @@ import * as sky from '../sky.js';
 import { store } from '../store.js';
 import { compassCorrection, isCalibrated, describeOffset } from '../calibration.js';
 import { openCalibrate } from './calibrate.js';
-import { icons, toast, esc } from '../ui.js';
+import { icons, esc } from '../ui.js';
 
 const RAD = Math.PI / 180;
 

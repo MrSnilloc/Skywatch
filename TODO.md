@@ -2,6 +2,11 @@
 
 Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 
+## Status: FINISHED FOR NOW (owner, 2026-11-12, v0.35)
+Every numbered item is built and the owner is happy with the app. Still unconfirmed on the phone: #3 colour key,
+#10 aurora alert (needs a real storm), the upright lock and the v0.35 clean-up. Next time: start from the
+"LATER, FOR GOOGLE PLAY" and "ON HOLD" lists, or whatever the owner asks for.
+
 ## How to work on this list
 - Do **ONE item at a time**, in the order below. When an item is done, say in plain words what changed
   and how to test it on the phone, then **wait for the OK** before starting the next.
@@ -154,6 +159,10 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 - **v0.34 — Space "⛶ Clean view" chip** (all Space views): hides every button, caption, the speed bar and the app's
   top bar and tabs; drag and pinch still work; the faint ✕ (top right) or Android Back brings them back. Names
   drawn on the picture stay (the Moon has its own "Names" chip). Owner confirmed v0.33 items look good.
+- **v0.35 — clean-up pass (2026-11-12):** fixed planes on the Sky map being drawn twice (once as a "planet" dot
+  with a bold name); removed unused imports and leftovers; planet pictures added to the offline list; Earth view
+  keeps each highlighted satellite's orbit for 4 s instead of recalculating it every frame; tidier Space time
+  label. Every screen, every Events section and every planet close-up opened in a browser with no errors.
 
 ## Planet look (owner feedback 2026-11-11: painted planets don't look good, Jupiter has no Great Red Spot)
 - **BUILT in v0.25:** drag to fly around a planet + "◎ Recentre" chip (also on Earth and the Moon close-up);

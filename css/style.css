@@ -396,3 +396,5 @@ body.sky-full #fab { bottom: calc(var(--safe-b) + 64px); right: calc(env(safe-ar
 .sp-wrap.sp-clean .sp-exit { display: block; }
 .sp-wrap.sp-clean .sky-top, .sp-wrap.sp-clean .sp-bar, .sp-wrap.sp-clean #sp-info, .sp-wrap.sp-clean #sp-speed { display: none !important; }
 body.sp-clean-on #fab { display: none; }
+/* Space: the date/time in the top corner stays small and tidy when it needs two lines */
+.sp-time { font-size: 11px; line-height: 1.25; text-align: right; min-width: 0; }

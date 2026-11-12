@@ -8,7 +8,7 @@
 // TO ADD A VIEW: write a file that exports draw(k, state, date) like spacePlanet.js, add it to viewKey() / the
 // draw switch in frame(), and give it chips in controls().
 
-import { col, mix, isNight } from '../colors.js';
+import { col, isNight } from '../colors.js';
 import { icons, esc } from '../ui.js';
 import { phaseName } from '../sky.js';
 import { loadGroup, loadSat, loadStarlink, starlinkState } from '../satellites.js';
@@ -277,7 +277,14 @@ function drawEarth(date) {
       const v = [pv.position.x / RE, pv.position.y / RE, pv.position.z / RE], p = P(v);
       return hidden(v, p) ? null : p;
     };
-    const lap = []; for (let k = 0; k <= 90; k++) lap.push(at(-per * 0.5 + per * k / 90));
+    // One lap of the orbit, half behind and half ahead. Working it out is the costly part, so it is kept
+    // for a few seconds (an orbit barely shifts in that time) and only re-aimed at the screen each frame.
+    if (!s.lap || Math.abs(s.lap.at - date.getTime()) > 4000) {
+      const pts = [];
+      for (let k = 0; k <= 90; k++) { const pv = SAT().propagate(s.satrec, new Date(date.getTime() - per * 0.5 + per * k / 90)); pts.push(pv && pv.position ? [pv.position.x / RE, pv.position.y / RE, pv.position.z / RE] : null); }
+      s.lap = { at: date.getTime(), pts };
+    }
+    const lap = s.lap.pts.map(v => { if (!v) return null; const p = P(v); return hidden(v, p) ? null : p; });
     const c = isSel ? '#ffffff' : s.color;
     if (fast) {                                        // sped up: the whole orbit as one steady line
       g.beginPath(); let pen = false;
@@ -791,4 +798,3 @@ export const spaceView = {
     root = null; cv = null; g = null; pointers.clear();
   },
 };
-void mix;

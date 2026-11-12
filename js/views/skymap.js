@@ -353,7 +353,7 @@ function draw() {
   const sunO = model.objs.get('sun');
   if (L.planets) {
     for (const o of model.objs.values()) {
-      if (o.kind === 'sat') continue;
+      if (o.kind === 'sat' || o.kind === 'plane') continue;      // those have their own drawing further down
       if (o.kind === 'comet') {
         const p = P(o.vec), pt = P(o.tail);
         if (!onScr(p, 40)) continue;

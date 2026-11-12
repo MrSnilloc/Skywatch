@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.34.0',
+  version: '0.35.0',
   rotatingViews: ['sky'],    // only these screens turn sideways with the phone; the rest stay upright (Android app),
 
   // First-run defaults. The user can change all of these in Settings.

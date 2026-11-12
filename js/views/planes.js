@@ -3,11 +3,10 @@
 //   Map   : dark street map with planes gliding in real time; North-up or Heading-up (turns with your phone).
 
 import { loadPlanes, planeLook, kmToMi, ktToMph, altColor, altLegend, closestApproach } from '../planes.js';
-import { routeOf, routeProgress, routeLine, fmtLeft } from '../routes.js';
+import { routeOf, routeProgress, fmtLeft } from '../routes.js';
 import { dirName } from '../sky.js';
 import { createOrientation } from '../compass.js';
 import { compassCorrection } from '../calibration.js';
-import { store } from '../store.js';
 import { col, isNight } from '../colors.js';
 import { esc, legendHTML } from '../ui.js';
 import { planeAhead, strokeAhead, drawMarks } from '../paths.js';

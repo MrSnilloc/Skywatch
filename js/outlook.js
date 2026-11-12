@@ -7,7 +7,7 @@ import { visiblePasses } from './issService.js';
 import { eventData } from './events.js';
 import { moonRating } from './showers.js';
 import { assess } from './launches.js';
-import { interestingComets, bestTonight, cometAt } from './comets.js';
+import { interestingComets, bestTonight } from './comets.js';
 import * as skyMod from './sky.js';
 
 const A = () => globalThis.Astronomy;
