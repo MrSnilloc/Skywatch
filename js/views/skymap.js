@@ -9,6 +9,7 @@ import { loadSkyData, skyData, updateSkyPositions, vecAt } from '../skydata.js';
 import { createOrientation } from '../compass.js';
 import { compassCorrection, nudgeOffset, isCalibrated } from '../calibration.js';
 import { store } from '../store.js';
+import { isNativeApp } from '../platform.js';
 import { icons, esc, toast, legendHTML } from '../ui.js';
 import { loadGroup, overheadNow } from '../satellites.js';
 import { fmtTime, fmtDayInline } from '../time.js';
@@ -42,7 +43,10 @@ let ctx, root, cv, g, W = 0, H = 0, dpr = 1, raf = 0, dirty = true, orient = nul
 // nothing, so it shows the live sky map with a crosshair instead.
 let video = null, stream = null, camErr = '', camCircleDeg = 10, camP = null, scanning = 0;
 // Full screen: the app's top bar and tabs are hidden and the map's own controls fade until you touch the screen.
-let fadeTimer = 0, autoFull = false, landscape = null;
+let fadeTimer = 0, autoFull = false, turnTimer = 0;
+// Is the phone held sideways? Worked out from the screen's own shape (some phones don't answer the CSS
+// "orientation / pointer" questions reliably inside an app). Desktop browser windows don't count.
+const sideways = () => innerWidth > innerHeight && (isNativeApp() || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches));
 function showControls() {
   if (!root) return;
   root.classList.remove('ctl-fade'); clearTimeout(fadeTimer);
@@ -56,10 +60,14 @@ function setFull(on, auto = false) {
 }
 /** Turning the phone sideways goes full screen; turning it back upright leaves it (if that's how you got in). */
 function onTurn() {
-  if (!landscape || !root) return;
-  if (landscape.matches && !S.full) setFull(true, true);
-  else if (!landscape.matches && S.full && autoFull) setFull(false);
+  if (!root) return;
+  const side = sideways();
+  if (side && !S.full) setFull(true, true);
+  else if (!side && S.full && autoFull) setFull(false);
+  else resize();
 }
+// The screen reports its new shape a moment after the turn, so check now and again shortly after.
+function onShape() { onTurn(); clearTimeout(turnTimer); turnTimer = setTimeout(onTurn, 350); }
 let nightWas = false, model = null, modelSec = -1, hits = [], starScr = null, lastView = null, wakeLock = null, ready = false, noData = '';
 const pointers = new Map();
 let gc = null, gg = null;
@@ -899,12 +907,10 @@ export const skyView = {
     root = el.querySelector('.sky-wrap'); cv = root.querySelector('#sky-cv'); g = cv.getContext('2d');
     root.addEventListener('click', onClick);
     root.addEventListener('pointerdown', showControls, true);
-    landscape = matchMedia('(orientation: landscape) and (pointer: coarse)');       // phones and tablets only, not desktop windows
-    landscape.addEventListener('change', onTurn);
     this._offR = ctx.bus.on('routes', () => { showInfo(); const u = document.getElementById('ufo-route'); const pl = u && ctx.planes && ctx.planes.list.find(x => x.id === u.dataset.plane); if (pl) u.innerHTML = routeHTML(ctx, pl); });
     S.full = false; setTimeout(onTurn, 0);
     bindPointer();
-    window.addEventListener('resize', resize);
+    window.addEventListener('resize', onShape); window.addEventListener('orientationchange', onShape);
     orient = createOrientation({ smoothing: 0.3, getCorrection: () => compassCorrection(ctx.location()) });
     const hasSensors = 'DeviceOrientationEvent' in window && (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
     if (params && params.mode) S.mode = params.mode; else if (!hasSensors) S.mode = 'free';
@@ -927,9 +933,9 @@ export const skyView = {
   tick() { /* animates itself */ },
   unmount() {
     mounted = false; cancelAnimationFrame(raf); exitCam();
-    clearTimeout(fadeTimer); if (landscape) landscape.removeEventListener('change', onTurn); landscape = null;
+    clearTimeout(fadeTimer); clearTimeout(turnTimer);
     S.full = false; document.body.classList.remove('sky-full'); if (this._offR) this._offR();
-    window.removeEventListener('resize', resize);
+    window.removeEventListener('resize', onShape); window.removeEventListener('orientationchange', onShape);
     if (orient) orient.stop(); orient = null;
     if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }
     if (this._off) this._off(); if (this._off2) this._off2(); if (this._off3) this._off3(); if (this._off4) this._off4(); clearInterval(this._planeTimer);

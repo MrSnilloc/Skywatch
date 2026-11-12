@@ -42,7 +42,7 @@ export async function openNotifySettings(ctx, onBack) {
     ${groups.map(g => `<h3 class="sect">${esc(g)}</h3><div class="card list-in">${types.filter(t => t.group === g).map(rowHTML).join('')}</div>`).join('')}
     <h3 class="sect">Quiet hours</h3>
     <div class="card list-in">
-      <label class="set-row"><span class="grow">No alerts overnight<span class="sub">Eclipses still come through</span></span><input type="checkbox" data-key="quietOn" ${store.get('quietOn') ? 'checked' : ''}><span class="switch"></span></label>
+      <label class="set-row"><span class="grow">No alerts overnight<span class="sub">Eclipses and aurora still come through</span></span><input type="checkbox" data-key="quietOn" ${store.get('quietOn') ? 'checked' : ''}><span class="switch"></span></label>
       <div class="set-row"><span class="grow">From</span><select data-key="quietFrom" data-num="1">${HOURS.map(([h, l]) => `<option value="${h}" ${+store.get('quietFrom') === h ? 'selected' : ''}>${l}</option>`).join('')}</select>
         <span>to</span><select data-key="quietTo" data-num="1">${HOURS.map(([h, l]) => `<option value="${h}" ${+store.get('quietTo') === h ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     </div>

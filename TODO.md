@@ -14,7 +14,7 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 
 ## Items
 
-- [ ] **1. PLANE FLIGHT INFO** — look up each callsign's route (adsbdb / adsb.lol; confirm they're free for apps
+- [x] **1. PLANE FLIGHT INFO** *(owner confirmed 2026-11-12)* — look up each callsign's route (adsbdb / adsb.lol; confirm they're free for apps
   first), cached per plane. Show airline name, From → To airports, a progress bar with time left, and
   "Private / no route" for planes with no flight number. Use the route in "What's this?" answers and plane
   alerts. Photos (Planespotters) later, not now.
@@ -26,18 +26,22 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
     user looks at, and caches 6 h. Tested in a browser with a fake plane list + real adsbdb lookup. Waiting for
     the owner's phone test.*
 
-- [ ] **2. SKY MAP SIDEWAYS** — turning the phone sideways goes full screen (top bar and tabs hidden, controls
+- [x] **2. SKY MAP SIDEWAYS** *(owner confirmed on the phone 2026-11-12, v0.30)* — turning the phone sideways goes full screen (top bar and tabs hidden, controls
   fade, tap to show them). Also add a manual full-screen button.
   - *BUILT 2026-11-11 in v0.27 (`skymap.js` setFull/onTurn; fade time `config.sky.fullFadeMs`). ⛶ button, fade,
     tap-to-show and Back-to-exit tested in a browser. Turning the phone sideways could NOT be tested there.
     The Android status bar stays visible (only the app's own bars hide). Waiting for the owner's phone test.*
+  - *Owner 2026-11-12: on the phone the view rotated but stayed shrunk with the bars still showing — the turn was
+    never noticed (it relied on a CSS "orientation + coarse pointer" question). FIXED in v0.30: the turn is now
+    read from the screen's own shape on every resize/orientation change, and the map is re-sized after it.
+    Reproduced and checked in a browser at 812x375. Waiting for the owner's phone test.*
 
 - [ ] **3. PLANE COLOR LEGEND** — altitude key (under 5k ft orange, 5–15k yellow, 15–28k light blue, above 28k
   blue) on the plane map, radar and Sky map.
   - *BUILT 2026-11-11 in v0.27 (bands in `config.planes.altBands`; planes on the Sky map are now coloured by
     altitude too, and the key shows there while a plane is on screen). Waiting for the owner's phone test.*
 
-- [ ] **4. BUG: ISS missing from Sky map** — the ISS didn't show on the Sky map during a real pass
+- [x] **4. BUG: ISS missing from Sky map** *(owner confirmed 2026-11-12)* — the ISS didn't show on the Sky map during a real pass
   (Nov 10, 2026). Check layer defaults, sunlit/dark filters and orbit-data age. Find the cause before
   changing anything.
   - *Investigated 2026-11-11, nothing changed yet. Replaying the Nov 10 5:52 PM pass (default location, fresh
@@ -52,12 +56,20 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
     in a browser replay of the Nov 10 pass. Waiting for the owner's phone test during a real pass — tick the
     box once they say OK.*
 
-- [ ] **5. "WHAT'S THIS?" REWORK** — it said "Unidentified" while aimed at the ISS. Use a wider search radius to
+- [x] **5. "WHAT'S THIS?" REWORK** *(owner confirmed 2026-11-12)* — it said "Unidentified" while aimed at the ISS. Use a wider search radius to
   allow for compass error. Rank results by brightness, movement and passes happening right now. At night,
   use the live Sky-map view with a crosshair instead of the camera.
 
-- [ ] **6. PROJECTED PATHS** — dotted line ahead of planes and satellites with +1 min time marks, and a faded
+- [x] **6. PROJECTED PATHS** — dotted line ahead of planes and satellites with +1 min time marks, and a faded
   trail behind. On the plane map/radar, the Sky map and the Space view.
+  - *BUILT 2026-11-11 in v0.28 (`js/paths.js`, lengths in `config.paths`). Every plane: 3 min dotted line with
+    minute dots; the tapped plane: 10 min with "+1 min, +2…" labels. Sky map: planes, plus satellites that are
+    visible now / the ISS / the one tapped (5 min ahead, 3 min trail) — not every satellite, to avoid clutter.
+    Space (Earth): featured + tapped satellites get half a lap of faded trail and half a lap dotted, with minute
+    marks on the tapped one (labels thin out until you zoom in). Browser-tested with fake planes and a replayed
+    ISS pass. Owner confirmed on the phone 2026-11-12.*
+  - *Owner 2026-11-12: the line ahead of every plane was too cluttered. v0.31: only the tapped plane gets a
+    lead line now (`config.paths.planeAheadMin: 0`). Satellites unchanged.*
 
 - [x] **7. ANDROID BACK BUTTON** — Back closes any open sheet or popup first, then returns to the Look Up start
   screen. Only Back on Look Up exits the app. (Capacitor App plugin backButton listener.)
@@ -79,6 +91,12 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 - [ ] **10. AURORA ALERTS** — NOAA SWPC free forecast (Kp index / OVATION). Alert when a storm is strong enough
   for my latitude (look north). New "Aurora" switch in Settings → Notifications, plus a Look Up card when
   there's a chance.
+  - *BUILT 2026-11-12 in v0.29 (`js/aurora.js`, numbers in `config.aurora`). Source checked: NOAA SWPC 3-day Kp
+    forecast — US government, public domain, free for any lawful use, no key; don't imply NOAA endorsement; no
+    hard rate limit (app asks at most once an hour). Home (magnetic latitude ~46°) needs about Kp 8–9, so alerts
+    will be rare. Alert = storm reaches your latitude during dark hours (comes through quiet hours); Look Up card
+    also shows a "slim chance" one Kp step below. The forecast is only refreshed when the app is opened.
+    Tested in a browser with the real feed and a faked Kp 9 night. Waiting for the owner's phone test.*
 
 - [x] **11. COMPASS CALIBRATION (one-tap offset)** — pick a target, aim the phone at it, tap Calibrate. Save
   offset = the target's true azimuth − the compass heading on the phone, and apply it everywhere (Sky map,
@@ -111,6 +129,13 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   build time, not by the app). Add JPL to the credits screen.
 - 2026-11-11: owner confirmed #8, #9 and #11 on the phone (ticked). #4 and #5 still wait for a night test.
 - Owner: Moon craters (blocky near the lit edge) to be improved LATER; Mercury, Venus, Neptune look good.
+- **Moon craters DONE in v0.32 (2026-11-12):** the Moon close-up is now painted from NASA's real Moon
+  (`data/moon/moon.jpg` + `moon_height.jpg`, NASA Scientific Visualization Studio CGI Moon Kit, public domain,
+  560 KB; loader `js/moonSurface.js`, settings `config.space.moon`). The heights shade the craters along the lit
+  edge, and the picture is now drawn at screen sharpness however far you zoom (it used to be a 320-dot picture
+  stretched). The old drawn Moon is the fallback if the files are missing. Names line up with the real craters
+  (checked: Tsiolkovskiy). Browser-tested; waiting for the owner's phone test. The small Moon in the "Orbit"
+  view and on the Earth view is still the simple drawn one.
 
 ## Planet look (owner feedback 2026-11-11: painted planets don't look good, Jupiter has no Great Red Spot)
 - **BUILT in v0.25:** drag to fly around a planet + "◎ Recentre" chip (also on Earth and the Moon close-up);
@@ -131,7 +156,8 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
 ## LATER, FOR GOOGLE PLAY (don't build yet — just kept here)
 - Privacy policy
 - Flight routes: get David Taylor's permission for adsbdb.com route data, or remove 'adsbdb' from `config.planes.routeSources`
-- Credits screen must list: Solar System Scope (CC BY 4.0), NASA/JPL Horizons, adsb.lol (ODbL), adsbdb.com
+- Credits screen must list: Solar System Scope (CC BY 4.0), NASA/JPL Horizons, adsb.lol (ODbL), adsbdb.com, NOAA SWPC (aurora forecast),
+  NASA's Scientific Visualization Studio (Moon maps)
 - Map tiles that are allowed in an app
 - Credits screen
 - Signed release build

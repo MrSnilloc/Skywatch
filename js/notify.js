@@ -26,6 +26,7 @@ import { routeSoon, routeLine } from './routes.js';
 import { loadSat, loadStarlink, starlinkState } from './satellites.js';
 import { loadLaunches } from './launches.js';
 import { loadComets } from './comets.js';
+import { loadAurora, auroraChances, stormName } from './aurora.js';
 
 const A = () => globalThis.Astronomy;
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -158,6 +159,16 @@ const BUILDERS = {
     return out;
   },
 
+  // One alert per night with a real chance (not the "slim" ones), at the start of the dark hours of the storm.
+  async aurora(ctx) {
+    await loadAurora(ctx);
+    return auroraChances(ctx).filter(c => c.level === 'good').map(c => ({
+      key: `aurora:${c.from.toDateString()}`, at: new Date(Math.max(c.from.getTime(), Date.now() + MIN)),
+      title: `Aurora possible tonight — look ${c.dir}`,
+      body: `NOAA forecasts Kp ${Math.round(c.kp)} (${stormName(c.kp) || 'active'}) ${fmtTime(c.from)} – ${fmtTime(c.to)}; your latitude needs about Kp ${Math.ceil(c.need)}. Find a dark spot with a clear ${c.dir}ern horizon.`,
+      go: 'tonight' }));
+  },
+
   async daily(ctx) {
     const out = [], cfg = ctx.config.notify, loc = ctx.location(), obs = makeObserver(loc);
     let hours = null; try { hours = await fetchClouds(loc); } catch (e) { hours = null; }
@@ -288,7 +299,7 @@ export function initNotify(ctx) {
     if (!store.getCache('notifyAsked')) { store.setCache('notifyAsked', 1); await askPermission(); }
     preload(ctx); soon(ctx, 4000);
   }, 2500);
-  for (const ev of ['iss', 'sats', 'launches', 'comets']) ctx.bus.on(ev, () => soon(ctx, 5000));
+  for (const ev of ['iss', 'sats', 'launches', 'comets', 'aurora']) ctx.bus.on(ev, () => soon(ctx, 5000));
   store.onChange((keys) => {
     if (keys.some(k => k.startsWith('n_') || k.startsWith('quiet') || ['lat', 'lon', 'minPeakEl'].includes(k))) { preload(ctx); soon(ctx, 1500); }
   });

@@ -9,6 +9,7 @@ import { loadLaunches } from '../launches.js';
 import { loadComets } from '../comets.js';
 import { loadPlanes, overheadSoon, kmToMi } from '../planes.js';
 import { routeOf, routeLine } from '../routes.js';
+import { loadAurora, auroraChances, stormName } from '../aurora.js';
 import { store } from '../store.js';
 import { fmtTime, fmtDay, fmtCountdown } from '../time.js';
 import { icons, esc, moonSVG } from '../ui.js';
@@ -181,12 +182,12 @@ function render() {
   plan = buildPlan(ctx, new Date()); planAt = Date.now();
   const p = plan;
   const cards = p.items.filter(i => i.kind !== 'planet').slice(0, 8);
-  root.innerHTML = `<div id="lu-plane"></div>${headerHTML(p)}${timelineHTML(p)}
+  root.innerHTML = `<div id="lu-plane"></div><div id="lu-aurora"></div>${headerHTML(p)}${timelineHTML(p)}
     <h3 class="sect">Worth looking up for</h3>
     ${cards.length ? cards.map(cardHTML).join('') : '<div class="card"><div class="muted">A quiet one — nothing special tonight. The planets below are still worth a look, and there’s more coming up.</div></div>'}
     ${planetsHTML(p)}${laterHTML(p)}
-    <p class="foot">Worked out for ${esc(ctx.location().name)}. Cloud forecast: Open-Meteo.com. Tap anything to explore.</p>`;
-  planeBanner();
+    <p class="foot">Worked out for ${esc(ctx.location().name)}. Cloud forecast: Open-Meteo.com. Aurora forecast: NOAA SWPC. Tap anything to explore.</p>`;
+  planeBanner(); auroraCard();
 }
 
 async function getClouds() {
@@ -195,6 +196,22 @@ async function getClouds() {
   try { clouds = await fetchClouds(ctx.location()); cloudErr = ''; } catch (e) { cloudErr = e.message; }
   loadingClouds = false;
   render();
+}
+
+/** Aurora card: only shown when NOAA's forecast gives a chance from here in the next few nights. */
+function auroraCard() {
+  const el = root && root.querySelector('#lu-aurora'); if (!el) return;
+  const c = auroraChances(ctx)[0];
+  let html = '';
+  if (c) {
+    const good = c.level === 'good', tonight = c.from - Date.now() < 18 * 3600e3;
+    const cloud = clouds ? avgCloud(clouds, c.from.getTime(), c.to.getTime() + 3600e3) : null;
+    html = `<div class="card lu-aurora ${good ? 'hot' : ''}"><span class="ic">🌌</span><span class="grow">
+      <span class="name">${good ? 'Aurora possible' : 'Slim chance of aurora'} ${tonight ? 'tonight' : esc(fmtDay(c.from))} — look ${c.dir}</span>
+      <span class="sub">${fmtTime(c.from)} – ${fmtTime(c.to)} · NOAA forecasts Kp ${Math.round(c.kp)}${stormName(c.kp) ? ' (' + stormName(c.kp) + ')' : ''}; here it takes about Kp ${Math.ceil(c.need)}</span>
+      <span class="sub">${good ? `Low on the ${c.dir}ern horizon, from somewhere dark.` : 'Probably too faint to see, but a phone camera on night mode might catch a glow.'}${cloud == null ? '' : ` ${cloudVerdict(cloud).label} then (${Math.round(cloud)}% cloud).`} Forecasts change — check again closer to the time.</span></span></div>`;
+  }
+  if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
 }
 
 function planeBanner() {
@@ -240,6 +257,7 @@ export const tonightView = {
     if (starlinkState(ctx).status === 'idle') satTimers.push(setTimeout(() => loadStarlink(ctx), 7000));
     if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx);
     if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
+    loadAurora(ctx); this._offA = ctx.bus.on('aurora', () => auroraCard());
     this._offC = ctx.bus.on('comets', () => render());
     this._offP = ctx.bus.on('planes', () => planeBanner());
     this._offR = ctx.bus.on('routes', () => planeBanner());
@@ -249,6 +267,6 @@ export const tonightView = {
     this._off = ctx.bus.on('iss', () => { if (Date.now() - planAt > 4000) render(); });
   },
   tick() { if (!root) return; if (Date.now() - planAt > 60000) render(); else planeBanner(); },
-  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); if (this._offR) this._offR(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
+  unmount() { if (this._off) this._off(); if (this._offL) this._offL(); if (this._offC) this._offC(); if (this._offP) this._offP(); if (this._offR) this._offR(); if (this._offA) this._offA(); clearInterval(this._planeTimer); satTimers.forEach(clearTimeout); satTimers = []; root = null; },
 };
 void sky;

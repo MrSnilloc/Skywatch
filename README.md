@@ -43,6 +43,9 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/outlook.js`, `js/weather.js` | The Look Up plan (today + tonight + next 30 days) and the cloud forecast (Open-Meteo) |
 | `js/identify.js` | “What’s this?” ranking: wide search, ordered by brightness, movement and passes happening now |
 | `js/routes.js` | Flight routes from a callsign (airline, From → To, progress), cached per plane (**add a source: one entry**) |
+| `js/moonSurface.js` | The map the Moon close-up is painted from: NASA's real picture + heights, or the drawn fallback (settings in `config.space.moon`) |
+| `js/aurora.js` | Aurora chance for your latitude from NOAA's 3-day Kp forecast (rule-of-thumb numbers in `config.aurora`) |
+| `js/paths.js` | Projected paths: points ahead/behind for planes and satellites + shared drawing (dotted line, minute marks, faded trail); lengths in `config.paths` |
 | `js/planes.js`, `js/ufo.js`, `js/views/planes.js` | Live aircraft + where they appear in your sky; UFO log and explanations |
 | `js/comets.js` | Comet orbits, positions and brightness estimates |
 | `js/launches.js` | Upcoming launches (Launch Library 2) + can-I-see-it check |
@@ -96,6 +99,7 @@ Browsers block the free plane feeds for websites, so live planes (map, radar, ov
 - Aircraft: adsb.lol, airplanes.live, OpenSky Network (community ADS-B feeds).
 - Flight routes: adsb.lol (ODbL; routes from Virtual Radar Server’s public-domain list) and adsbdb.com (route data © David Taylor & Jim Mason — permission needed before publishing).
 - Launch data: The Space Devs — Launch Library 2.
+- Moon surface and height maps (`data/moon/`): NASA's Scientific Visualization Studio, CGI Moon Kit (svs.gsfc.nasa.gov/4720), public domain; from Lunar Reconnaissance Orbiter data.
 - Planet surface maps (`data/planets/`): Solar System Scope (solarsystemscope.com/textures), CC BY 4.0, based on NASA imagery; shrunk to 1024 px.
 - Moon orbits for Mars, Saturn, Uranus and Neptune: fitted from NASA/JPL Horizons.
 - Coastlines: Natural Earth (public domain) via world-atlas (ISC).

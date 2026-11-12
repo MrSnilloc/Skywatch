@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.28.0',
+  version: '0.32.0',
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -48,6 +48,18 @@ export const CONFIG = {
     binoMagLimit: 9.5,       // faintest moon ordinary binoculars can show (higher number = fainter)
     binoGlareRadii: 2,       // a moon closer than this many planet-radii to its planet is lost in the glare
     binoFieldArcmin: 30,     // width of sky shown in "Through binoculars tonight" (the Moon is about 30′ wide)
+    // The Moon close-up (moonSurface.js): NASA's real Moon. A missing file just means the simple drawn Moon.
+    moon: {
+      picture: 'data/moon/moon.jpg',          // colour picture of the whole surface (NASA SVS CGI Moon Kit)
+      heights: 'data/moon/moon_height.jpg',   // heights as grey levels — used for crater shadows near the lit edge
+      maxWidth: 2048,          // the picture is shrunk to this width in memory
+      kmPerLevel: 0.08,        // height of one grey level (the picture spans about 20 km, deepest basin to highest peak)
+      smooth: 2,               // how many times the heights are blurred before use (hides the picture's graininess)
+      relief: 3,               // how strongly slopes are shaded (1 = true to life, which looks flat on a phone)
+      contrast: 1.25,          // above 1 = darker seas
+      step: 1.5,               // one picture dot per this many screen pixels (smaller = sharper but slower)
+      dragStep: 3,             // …while you are dragging
+    },
     // Real surface maps for the planet close-ups (see planetTextures.js). A missing file just means the simple painted look.
     textures: {
       Mercury: 'data/planets/mercury.jpg', Venus: 'data/planets/venus.jpg', Mars: 'data/planets/mars.jpg', Jupiter: 'data/planets/jupiter.jpg',
@@ -151,9 +163,22 @@ export const CONFIG = {
     overheadSec: 300,        // ...within the next 5 minutes
   },
 
+  // Aurora (aurora.js): NOAA SWPC 3-day Kp forecast — US government, public domain, free, no key.
+  aurora: {
+    forecastUrl: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json',
+    cacheMin: 60,            // NOAA updates it a few times a day; ask at most this often
+    poleLat: 80.7, poleLon: -72.7,   // Earth's magnetic (dipole) north pole, 2025
+    ovalLatAtKp0: 66.5,      // magnetic latitude of the aurora's edge in calm conditions…
+    degPerKp: 2,             // …and how far it moves toward the equator per Kp step
+    horizonReachDeg: 4,      // it can be seen low on the horizon this many degrees beyond its edge
+    minKp: 4,                // never call it a chance below this, even in the far north
+    slimKp: 1,               // within this much Kp of what's needed = "slim chance" card (no alert)
+    darkSunAlt: -8,          // the Sun must be this far below the horizon
+  },
+
   // Projected paths (paths.js): dotted line ahead with minute marks, faded trail behind.
   paths: {
-    planeAheadMin: 3,        // every plane gets a dotted line this many minutes ahead
+    planeAheadMin: 0,        // dotted line ahead of EVERY plane, in minutes (0 = none: it cluttered the map)
     planeAheadSelMin: 10,    // the plane you tapped: longer, with "+1 min" labels
     satAheadMin: 5,          // Sky map: satellites you can see (and the ISS, and the one you tapped)
     satTrailMin: 3,
@@ -210,6 +235,7 @@ export const CONFIG = {
       { id: 'shower', group: 'Events', icon: '☄', label: 'Meteor shower peaks', hint: 'Evening of the peak night', on: true },
       { id: 'launch', group: 'Events', icon: '🚀', label: 'Launches you could see', hint: '30 min before + liftoff', on: false },
       { id: 'comet', group: 'Events', icon: '☄', label: 'Bright comets', hint: 'When one is bright enough to see', on: true },
+      { id: 'aurora', group: 'Events', icon: '🌌', label: 'Aurora', hint: 'When a storm is strong enough for your latitude', on: true, quietOk: true },
       { id: 'daily', group: 'Daily and live', icon: '👁', label: 'Tonight’s sky summary', hint: 'Only when it looks clear', on: true,
         times: [['sunset', 'Sunset'], [18, '6 PM'], [20, '8 PM']], time: 18 },
       { id: 'planes', group: 'Daily and live', icon: '✈', label: 'Planes overhead', hint: 'Only while the app is open', on: false },

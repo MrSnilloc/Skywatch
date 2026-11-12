@@ -2,11 +2,12 @@
 // A globe you can spin, lit exactly as it is at the chosen time, tilted the way it hangs in YOUR sky, with
 // named seas and craters and the six Apollo landing sites. The glowing band along the day/night line is
 // "today's lit edge": shadows are longest there, so that is where binoculars show the most.
-// Surface data: ../moonmap.js. Orientation and lighting: ../moons.js. The Space screen hands in a drawing
+// Surface picture: ../moonSurface.js (NASA's real Moon). Names: ../moonmap.js. Orientation and lighting: ../moons.js. The Space screen hands in a drawing
 // kit `k`: { g, W, H, col, label, hits, night, ctx }.
 
 import { moonGlobe } from '../moons.js';
-import { moonMap, FEATURES, llVec } from '../moonmap.js';
+import { FEATURES, llVec } from '../moonmap.js';
+import { moonSurface } from '../moonSurface.js';
 import { phaseName, dirName } from '../sky.js';
 
 const RAD = Math.PI / 180;
@@ -24,39 +25,61 @@ function camera(mg, st) {
   return { d: mixv(d1, up0, Math.cos(st.pitch), Math.sin(st.pitch)), up: mixv(up0, d1, Math.cos(st.pitch), -Math.sin(st.pitch)), right };
 }
 
-/** Paint the lit globe into an off-screen picture n×n. Re-used while the view and the light haven't changed. */
-function renderGlobe(mg, cam, n, night) {
-  const key = [n, night, ...cam.d, ...cam.up, ...mg.sunDir].map(v => (typeof v === 'number' ? v.toFixed(3) : v)).join(',');
+/**
+ * Paint the lit globe into an off-screen picture that covers the screen (one picture dot per `step` screen
+ * pixels), so it stays sharp however far you zoom in. Re-used while the view and the light haven't changed.
+ * V = { cx, cy, R, W, H, step, night }
+ */
+function renderGlobe(mg, cam, V) {
+  const M = moonSurface(), { cx, cy, R, step } = V;
+  const bw = Math.ceil(V.W / step), bh = Math.ceil(V.H / step);
+  const key = [M.id, bw, bh, step, V.night, cx, cy, R.toFixed(1), ...[...cam.d, ...cam.up, ...mg.sunDir].map(v => v.toFixed(3))].join(',');
   if (key === bufKey) return buf;
-  if (!buf || buf.width !== n) { buf = document.createElement('canvas'); buf.width = buf.height = n; bufG = buf.getContext('2d'); }
-  const M = moonMap(), img = bufG.createImageData(n, n), d = img.data;
+  if (!buf || buf.width !== bw || buf.height !== bh) { buf = document.createElement('canvas'); buf.width = bw; buf.height = bh; bufG = buf.getContext('2d'); }
+  const img = bufG.createImageData(bw, bh), d = img.data;
   const ax = (v) => [dot(v, mg.xm), dot(v, mg.ym), dot(v, mg.zm)];       // into the Moon's own axes
-  const R = ax(cam.right), U = ax(cam.up), D = ax(cam.d), S = ax(mg.sunDir);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const u = (i + 0.5) / n * 2 - 1, w = 1 - (j + 0.5) / n * 2, rr = u * u + w * w, q = (j * n + i) * 4;
-    if (rr > 1) { d[q + 3] = 0; continue; }
-    const z = Math.sqrt(1 - rr);
-    const x = u * R[0] + w * U[0] + z * D[0], y = u * R[1] + w * U[1] + z * D[1], zz = u * R[2] + w * U[2] + z * D[2];
-    const lat = Math.asin(Math.max(-1, Math.min(1, zz))), lon = Math.atan2(y, x);
-    // look the spot up in the surface map, blending the four nearest cells so it stays smooth
-    const fx = (lon / RAD + 180) / 360 * M.w - 0.5, fy = Math.max(0, Math.min(M.h - 1.001, (90 - lat / RAD) / 180 * M.h - 0.5));
-    const i0 = Math.floor(fx), j0 = Math.floor(fy), tx = fx - i0, ty = fy - j0;
-    const a = j0 * M.w + ((i0 % M.w) + M.w) % M.w, b2 = j0 * M.w + ((i0 + 1) % M.w + M.w) % M.w, c = a + M.w, e = b2 + M.w;
-    const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
-    const alb = M.alb[a] * w00 + M.alb[b2] * w10 + M.alb[c] * w01 + M.alb[e] * w11;
+  const Rv = ax(cam.right), U = ax(cam.up), D = ax(cam.d), S = ax(mg.sunDir);
+  const rgb = M.rgb, tone = M.tone, mw = M.w, mh = M.h, sw = M.sw, sh = M.sh, relief = M.relief, edgePx = R / step;
+  const j0 = Math.max(0, Math.floor((cy - R) / step)), j1 = Math.min(bh - 1, Math.ceil((cy + R) / step));
+  const i0b = Math.max(0, Math.floor((cx - R) / step)), i1b = Math.min(bw - 1, Math.ceil((cx + R) / step));
+  for (let j = j0; j <= j1; j++) for (let i = i0b; i <= i1b; i++) {
+    const u = ((i + 0.5) * step - cx) / R, w = (cy - (j + 0.5) * step) / R, rr = u * u + w * w;
+    if (rr > 1) continue;
+    const q = (j * bw + i) * 4, z = Math.sqrt(1 - rr);
+    const x = u * Rv[0] + w * U[0] + z * D[0], y = u * Rv[1] + w * U[1] + z * D[1], zz = u * Rv[2] + w * U[2] + z * D[2];
+    const lonD = Math.atan2(y, x) / RAD + 180, latD = 90 - Math.asin(Math.max(-1, Math.min(1, zz))) / RAD;
+    // colour: look the spot up in the surface picture, blending the four nearest cells so it stays smooth
+    let fx = lonD / 360 * mw - 0.5, fy = Math.max(0, Math.min(mh - 1.001, latD / 180 * mh - 0.5));
+    let a0 = Math.floor(fx), b0 = Math.floor(fy), tx = fx - a0, ty = fy - b0;
+    let a = b0 * mw + ((a0 % mw) + mw) % mw, b2 = b0 * mw + ((a0 + 1) % mw + mw) % mw, c = a + mw, e = b2 + mw;
+    let w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+    let cr, cg, cb;
+    if (rgb) {
+      a *= 4; b2 *= 4; c *= 4; e *= 4;
+      cr = tone[rgb[a]] * w00 + tone[rgb[b2]] * w10 + tone[rgb[c]] * w01 + tone[rgb[e]] * w11;
+      cg = tone[rgb[a + 1]] * w00 + tone[rgb[b2 + 1]] * w10 + tone[rgb[c + 1]] * w01 + tone[rgb[e + 1]] * w11;
+      cb = tone[rgb[a + 2]] * w00 + tone[rgb[b2 + 2]] * w10 + tone[rgb[c + 2]] * w01 + tone[rgb[e + 2]] * w11;
+    } else { const al = M.alb[a] * w00 + M.alb[b2] * w10 + M.alb[c] * w01 + M.alb[e] * w11; cr = al; cg = al * 0.985; cb = al * 0.95; }
+    // slope: the same lookup in the height map (it can be a different size)
+    fx = lonD / 360 * sw - 0.5; fy = Math.max(0, Math.min(sh - 1.001, latD / 180 * sh - 0.5));
+    a0 = Math.floor(fx); b0 = Math.floor(fy); tx = fx - a0; ty = fy - b0;
+    a = b0 * sw + ((a0 % sw) + sw) % sw; b2 = b0 * sw + ((a0 + 1) % sw + sw) % sw; c = a + sw; e = b2 + sw;
+    w00 = (1 - tx) * (1 - ty); w10 = tx * (1 - ty); w01 = (1 - tx) * ty; w11 = tx * ty;
     const sgx = M.gx[a] * w00 + M.gx[b2] * w10 + M.gx[c] * w01 + M.gx[e] * w11, sgy = M.gy[a] * w00 + M.gy[b2] * w10 + M.gy[c] * w01 + M.gy[e] * w11;
     const l = x * S[0] + y * S[1] + zz * S[2];
     // local east / north on the surface, to turn the map's slopes into light and shadow
     const el = Math.hypot(x, y) || 1e-6, ex = -y / el, ey = x / el;
     const nx = -zz * ey, ny = zz * ex, nzv = x * ey - y * ex;
     const se = ex * S[0] + ey * S[1], sn = nx * S[0] + ny * S[1] + nzv * S[2];
-    const ll = l - 1.1 * (sgx * se + sgy * sn);     // a slope rising toward the Sun is brighter, one facing away is in shadow
-    const b = ll <= 0 ? 0 : Math.pow(Math.min(1, ll / 0.22), 0.8) * (0.78 + 0.22 * Math.max(0, l));
-    let v = alb * (0.04 + 0.96 * b) * 250;
-    let r = v, gg = v * 0.985, bb = v * 0.95;
+    const ll = l - relief * (sgx * se + sgy * sn);     // a slope facing the Sun is brighter, one facing away is in shadow
+    // nothing is lit once the Sun is well below that spot's horizon, however the ground slopes
+    const up = l < -0.05 ? 0 : l > 0.03 ? 1 : (l + 0.05) / 0.08;
+    const lit = ll <= 0 ? 0 : Math.pow(Math.min(1, ll / 0.22), 0.8) * (0.78 + 0.22 * Math.max(0, l)) * up;
+    const v = (0.04 + 0.96 * lit) * 250;
+    let r = cr * v, gg = cg * v, bb = cb * v;
     if (l > -0.015 && l < 0.2) { const t = 0.3 * (1 - Math.abs(l - 0.05) / 0.16); if (t > 0) { r += (92 - r) * t * 0.6; gg += (200 - gg) * t * 0.55; bb += (255 - bb) * t * 0.6; } }   // today's lit edge
-    if (night) { const L = 0.3 * r + 0.55 * gg + 0.15 * bb; r = L * 1.1; gg = L * 0.12; bb = L * 0.08; }
-    d[q] = r; d[q + 1] = gg; d[q + 2] = bb; d[q + 3] = rr > 0.985 ? 255 * (1 - rr) / 0.015 : 255;
+    if (V.night) { const L = 0.3 * r + 0.55 * gg + 0.15 * bb; r = L * 1.1; gg = L * 0.12; bb = L * 0.08; }
+    d[q] = r; d[q + 1] = gg; d[q + 2] = bb; d[q + 3] = Math.max(0, Math.min(1, (1 - Math.sqrt(rr)) * edgePx + 0.5)) * 255;
   }
   bufG.putImageData(img, 0, 0); bufKey = key;
   return buf;
@@ -73,9 +96,10 @@ export function drawMoonFace(k, st, date) {
   const { g, W, H, col } = k;
   const mg = moonGlobe(date, k.ctx.location()), cam = camera(mg, st);
   const R = Math.min(W, H) * 0.4 * st.zoom, cx = W / 2, cy = H / 2 + 6;
-  const n = Math.max(80, Math.min(st.dragging ? 170 : 320, Math.round(R * 1.1)));
+  const step = st.dragging ? k.ctx.config.space.moon.dragStep : k.ctx.config.space.moon.step;   // coarser while you drag, to stay quick
   g.imageSmoothingEnabled = true;
-  g.drawImage(renderGlobe(mg, cam, n, k.night), cx - R, cy - R, 2 * R, 2 * R);
+  const pic = renderGlobe(mg, cam, { cx, cy, R, W, H, step, night: k.night });
+  g.drawImage(pic, 0, 0, pic.width * step, pic.height * step);
 
   // features: where each one is on screen, and how high the Sun is there
   const world = (f) => { const v = llVec(f.lat, f.lon); return [0, 1, 2].map(i => v[0] * mg.xm[i] + v[1] * mg.ym[i] + v[2] * mg.zm[i]); };

@@ -349,6 +349,9 @@ body.sky-full #app { max-width: none; }
 .plane-card .sub b { font-weight: 650; }
 .lu-plane { display: flex; gap: 12px; align-items: center; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .lu-plane .ic { font-size: 22px; }
+.lu-aurora { display: flex; gap: 12px; align-items: flex-start; border-color: color-mix(in srgb, #62f0a5 45%, var(--line)); }
+.lu-aurora .ic { font-size: 24px; }
+.lu-aurora .sub { display: block; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 .row.sel { background: var(--panel2); }
 .cam-go { width: 100%; text-align: center; font-size: 17px; padding: 14px; }
@@ -380,3 +383,9 @@ body[data-view="point"] #fab, body[data-view="sky"] #fab, body.no-fab #fab, body
 .nrow label.grow { cursor: pointer; }
 .swl { display: flex; flex: none; cursor: pointer; }
 .swl input { display: none; }
+/* full-screen Sky map: keep the controls clear of the status bar and (sideways) the camera notch */
+body.sky-full .sky-top { top: calc(var(--safe-t) + 8px); left: calc(env(safe-area-inset-left, 0px) + 10px); right: calc(env(safe-area-inset-right, 0px) + 10px); }
+body.sky-full .sky-hud { top: calc(var(--safe-t) + 54px); left: calc(env(safe-area-inset-left, 0px) + 12px); }
+body.sky-full .sky-zoom { right: calc(env(safe-area-inset-right, 0px) + 10px); }
+body.sky-full .sky-time { bottom: calc(var(--safe-b) + 10px); }
+body.sky-full #fab { bottom: calc(var(--safe-b) + 64px); right: calc(env(safe-area-inset-right, 0px) + 14px); }
