@@ -61,7 +61,7 @@ async function load() {
       }
     }
     const tone = new Float32Array(256);
-    for (let v = 0; v < 256; v++) tone[v] = Math.pow(v / 255, cfg.contrast);
+    for (let v = 0; v < 256; v++) tone[v] = Math.pow(Math.min(1, v / 255 * cfg.gain), cfg.contrast);
     real = { id: 'real', w: pic.w, h: pic.h, rgb: pic.data, tone, sw, sh, gx, gy, relief: cfg.relief };
     state = 'ready';
   } catch (e) { state = 'none'; }

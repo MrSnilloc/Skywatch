@@ -20,6 +20,8 @@ import { routeOf, routeLine } from '../routes.js';
 import { routeHTML } from './planes.js';
 import { rankCandidates, confidence } from '../identify.js';
 import { planeAhead, spotLook, satTrack, strokeAhead, strokeTrail, drawMarks } from '../paths.js';
+import { loadLaunches } from '../launches.js';
+import { launchTrack } from '../launchPath.js';
 import { getLog, addToLog, removeFromLog, explain } from '../ufo.js';
 
 const A = () => globalThis.Astronomy;
@@ -28,13 +30,13 @@ const RAD = Math.PI / 180, DEG = 180 / Math.PI;
 // State that survives leaving and coming back to the screen.
 const S = {
   mode: 'live', fov: 60, az: 180, alt: 35, offsetMs: 0, target: null, sel: null,
-  layers: { stars: true, names: true, lines: true, conNames: true, planets: true, sats: true, planes: true, dso: true, grid: false, ground: true },
+  layers: { stars: true, names: true, lines: true, conNames: true, planets: true, sats: true, planes: true, launches: true, dso: true, grid: false, ground: true },
 };
 try { Object.assign(S.layers, store.getCache('skyLayers') || {}); } catch (e) { /* ignore */ }
 
 const LAYER_LABELS = [
   ['stars', 'Stars'], ['names', 'Star names'], ['lines', 'Constellation lines'], ['conNames', 'Constellation names'],
-  ['planets', 'Sun, Moon & planets'], ['sats', 'Satellites (ISS, Tiangong, Hubble…)'], ['planes', 'Planes (live, near you)'], ['dso', 'Clusters & nebulae'],
+  ['planets', 'Sun, Moon & planets'], ['sats', 'Satellites (ISS, Tiangong, Hubble…)'], ['planes', 'Planes (live, near you)'], ['launches', 'Rocket launches (estimated path)'], ['dso', 'Clusters & nebulae'],
   ['grid', 'Altitude / direction grid'], ['ground', 'Shade below the horizon'],
 ];
 
@@ -131,8 +133,15 @@ function updateModel(force) {
         ahead: pl.gsKt < 40 ? [] : planeAhead(pl, l, date.getTime(), picked(id) ? pc.planeAheadSelMin : pc.planeAheadMin, pc.stepSec).slice(1).map(V).filter(Boolean) });
     }
   }
+  // a rocket launch you might see, close to liftoff: its estimated path through your sky (launchPath.js)
+  const launch = S.layers.launches ? launchTrack(ctx, date) : null;
+  if (launch) {
+    const V = (p) => ({ vec: M.azAltToVec(p.az, p.el), mark: p.mark || 0 });
+    launch.paths.forEach(pa => { pa.vecs = pa.pts.map(V); pa.peakVec = V(pa.peak).vec; });
+    launch.nowVecs = launch.now.map(p => V(p).vec);
+  }
   // passNow = a highlighted satellite (the ISS) that is up AND visible to the eye right now
-  model = { date, obs, sunAlt: sun.alt, objs, sats, passNow: sats.find(o => o.star && o.seen) || null };
+  model = { date, obs, sunAlt: sun.alt, objs, sats, launch, passNow: sats.find(o => o.star && o.seen) || null };
   dirty = true;
 }
 
@@ -472,6 +481,32 @@ function draw() {
     g.font = '600 12px system-ui'; g.fillStyle = col(colr); g.textAlign = 'center';
     g.fillText(`${label} · ${dist}°`, Math.max(60, Math.min(W - 60, ax)), ay + (ay > cy ? -22 : 30)); g.textAlign = 'start';
   };
+  // rocket launch: dotted estimated path with minutes-after-liftoff marks, and where it should be right now
+  const La = cam ? null : model.launch;
+  if (La) {
+    const colr = '#ff7a7a', name = La.l.name.split('|').pop().trim(), end = ctx.config.launches.ascent[ctx.config.launches.ascent.length - 1][0];
+    La.paths.forEach((pa, i) => {
+      const xy = pa.vecs.map(t => { const p = P(t.vec); return p && onScr(p, 200) ? p : null; });
+      strokeAhead(g, xy, colr, i ? 0.55 : 0.95, 2);
+      drawMarks(g, pa.vecs.map((t, n) => t.mark && xy[n] && { x: xy[n][0], y: xy[n][1], min: t.mark }).filter(Boolean), colr, { labels: true, gap: 30 });
+      const s = xy.find(Boolean);
+      if (s && i === 0) {
+        const when = La.sec < 0 ? `liftoff ${fmtTime(La.l.net)}` : La.sec <= end ? `T+${Math.floor(La.sec / 60)}:${String(Math.floor(La.sec % 60)).padStart(2, '0')}` : 'launched';
+        g.font = '600 11px system-ui'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.7)'; g.fillStyle = col(colr);
+        const t1 = `🚀 ${name} · ${when}`, t2 = `estimated path${La.paths.length > 1 ? 's' : ''} · peaks ${Math.round(pa.peak.el)}° up`;
+        const tx = Math.max(8, Math.min(W - 190, s[0] + 8));
+        g.strokeText(t1, tx, s[1] + 16); g.fillText(t1, tx, s[1] + 16); g.strokeText(t2, tx, s[1] + 30); g.fillText(t2, tx, s[1] + 30);
+      }
+    });
+    for (const v of La.nowVecs) {                     // where it should be this second, if it left on time
+      const p = P(v); if (!onScr(p, 10)) continue;
+      const pulse = 9 + 3 * Math.sin(performance.now() / 220);
+      g.fillStyle = col('#ffd9d0'); g.beginPath(); g.arc(p[0], p[1], 4.5, 0, 2 * Math.PI); g.fill();
+      g.strokeStyle = col(colr); g.lineWidth = 2; g.beginPath(); g.arc(p[0], p[1], pulse, 0, 2 * Math.PI); g.stroke();
+    }
+    const aim = La.nowVecs[0] || La.paths[0].peakVec;
+    if (La.sec > -15 * 60 && La.sec <= end && S.target == null && !onScr(P(aim), -10)) edgeArrow(aim, 'Launch', colr);
+  }
   // a pass is happening: point at it whenever it is off-screen (no need to pick it under Find first)
   const pass = cam ? null : model.passNow;
   if (pass && S.target !== pass.id && !onScr(P(pass.vec), -10)) edgeArrow(pass.vec, pass.label, '#5cc8ff');
@@ -920,6 +955,8 @@ export const skyView = {
     resize(); updateButtons();
     if (S.layers.sats && ctx.sats.group.status === 'idle') loadGroup(ctx);
     if (!ctx.comets || ctx.comets.status === 'idle') loadComets(ctx);
+    if (!ctx.launches || ctx.launches.status === 'idle') loadLaunches(ctx);
+    this._off5 = ctx.bus.on('launches', () => { if (ready) { updateModel(true); dirty = true; } });
     const pollPlanes = () => { if (S.layers.planes && document.visibilityState === 'visible') loadPlanes(ctx); };
     pollPlanes(); this._planeTimer = setInterval(pollPlanes, ctx.config.planes.refreshSec * 1000);
     this._off4 = ctx.bus.on('planes', () => { if (ready) { updateModel(true); dirty = true; } });
@@ -934,7 +971,7 @@ export const skyView = {
   unmount() {
     mounted = false; cancelAnimationFrame(raf); exitCam();
     clearTimeout(fadeTimer); clearTimeout(turnTimer);
-    S.full = false; document.body.classList.remove('sky-full'); if (this._offR) this._offR();
+    S.full = false; document.body.classList.remove('sky-full'); if (this._offR) this._offR(); if (this._off5) this._off5();
     window.removeEventListener('resize', onShape); window.removeEventListener('orientationchange', onShape);
     if (orient) orient.stop(); orient = null;
     if (wakeLock) { try { wakeLock.release(); } catch (e) { /* ignore */ } wakeLock = null; }

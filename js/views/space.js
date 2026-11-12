@@ -35,7 +35,7 @@ const FEATURED = { iss: '#5cc8ff', css: '#ffb454', hst: '#c49bff' };
 // state kept between visits
 const S = { scene: 'earth', earthTurned: false, speedIdx: 0, dir: 1, hold: false, follow: false, simMs: Date.now(), yaw: null, pitch: 0.5, zoom: { earth: 1, moon: 1, solar: 1 }, sel: null, paused: false, pan: { moon: [0, 0], solar: [0, 0] },
   planet: { name: null, zoom: 1, pan: [0, 0], yaw: 0, pitch: 0, turned: false, dragging: false, bino: false, binoNote: '', caption: '' },      // Solar system → one planet
-  face: { on: false, zoom: 1, yaw: 0, pitch: 0, names: true, dragging: false, caption: '', tip: '', turned: false } };   // Moon → close-up
+  face: { on: false, zoom: 1, yaw: 0, pitch: 0, pan: [0, 0], flat: false, slide: false, names: true, dragging: false, caption: '', tip: '', turned: false } };   // Moon → close-up
 
 /** Which drawing is showing: 'earth' | 'moon' | 'face' | 'solar' | 'planet'. */
 const viewKey = () => (S.scene === 'moon' && S.face.on ? 'face' : S.scene === 'solar' && S.planet.name ? 'planet' : S.scene);
@@ -597,12 +597,26 @@ function controls() {
     acts.push(chip('bino', 'Through binoculars tonight', S.planet.bino));
   }
   if (key === 'face') {
-    acts.push(chip('mtonight', 'Tonight’s view'), chip('names', S.face.names ? 'Names on' : 'Names off', S.face.names));
+    acts.push(chip('mtonight', 'Tonight’s view'), chip('names', S.face.names ? 'Names on' : 'Names off', S.face.names),
+      chip('shadow', S.face.flat ? 'Shadow off' : 'Shadow on', !S.face.flat), chip('slide', S.face.slide ? 'Drag: slide' : 'Drag: spin', S.face.slide));
     if (S.face.turned) acts.push(chip('mreset', '◎ Recentre'));
   }
   if (pn && Math.hypot(pn[0], pn[1]) >= 20) acts.push(chip('recenter', '◎ Centre'));
+  acts.push(chip('clean', '⛶ Clean view'));
   root.querySelector('#sp-acts').innerHTML = acts.join('');
   setHint();
+}
+
+/**
+ * Clean view: hide every button, caption and bar (and the app's own top bar and tabs) so only the picture is left.
+ * Drag, pinch and tap still work. The faint ✕ in the corner — or Android Back — brings everything back.
+ */
+function setClean(on) {
+  S.clean = on;
+  if (on) { S.sel = null; showInfo(); }
+  root.classList.toggle('sp-clean', on);
+  document.body.classList.toggle('sky-full', on); document.body.classList.toggle('sp-clean-on', on);
+  setTimeout(() => { if (root) resize(); }, 60);                // the picture just got bigger (or smaller)
 }
 
 function showInfo() {
@@ -637,6 +651,7 @@ function jumpToEclipse() {
 }
 
 function pickAt(x, y) {
+  if (S.clean) return;                                // nothing pops up in clean view
   let best = null, bd = 30;
   for (const h of hits) { const d = Math.hypot(h.x - x, h.y - y) - h.pri; if (d < bd) { bd = d; best = h; } }
   S.follow = false;
@@ -677,9 +692,12 @@ function onClick(e) {
     if (S.planet.bino) S.planet.binoNote = jumpTonight(S.planet.name); else goLive();
   }
   else if (a === 'face') { S.face.on = b.dataset.v === '1'; S.sel = null; showInfo(); }
-  else if (a === 'mtonight') { S.face.yaw = 0; S.face.pitch = 0; S.face.turned = false; toast(jumpTonight('Moon')); }
-  else if (a === 'mreset') { S.face.yaw = 0; S.face.pitch = 0; S.face.turned = false; }
+  else if (a === 'mtonight') { Object.assign(S.face, { yaw: 0, pitch: 0, pan: [0, 0], turned: false, flat: false }); toast(jumpTonight('Moon')); }
+  else if (a === 'mreset') { Object.assign(S.face, { yaw: 0, pitch: 0, pan: [0, 0], turned: false }); }
+  else if (a === 'shadow') { S.face.flat = !S.face.flat; }
+  else if (a === 'slide') { S.face.slide = !S.face.slide; toast(S.face.slide ? 'Drag slides the Moon across the screen' : 'Drag spins the Moon'); }
   else if (a === 'names') { S.face.names = !S.face.names; }
+  else if (a === 'clean') { setClean(!S.clean); }
   controls();
 }
 
@@ -689,7 +707,7 @@ function setZoom(z) {
   const [min, max] = key === 'planet' ? [0.02, 14] : key === 'face' ? [0.6, 6] : key === 'solar' ? [0.5, 12] : [0.5, 6];
   const nz = Math.max(min, Math.min(max, z)), kf = nz / zoomOf();
   if (key === 'planet') { S.planet.pan = S.planet.pan.map(v => v * kf); S.planet.zoom = nz; controls(); return; }   // zoom around the middle of the screen
-  if (key === 'face') { S.face.zoom = nz; return; }
+  if (key === 'face') { S.face.pan = S.face.pan.map(v => v * kf); S.face.zoom = nz; return; }
   if (S.pan[key]) S.pan[key] = S.pan[key].map(v => v * kf);
   S.zoom[key] = nz;
 }
@@ -708,6 +726,10 @@ function bindPointer() {
       const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
       if (lastDist) setZoom(zoomOf() * d / lastDist);
       lastDist = d; if (start) start.moved = true;
+      if (viewKey() === 'face') {                      // two fingers also slide the Moon across the screen
+        S.face.pan[0] += dx / 2; S.face.pan[1] += dy / 2; S.face.dragging = true;
+        if (!S.face.turned) { S.face.turned = true; controls(); }
+      }
     } else if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
       start.moved = true;
       const key = viewKey();
@@ -718,9 +740,10 @@ function bindPointer() {
         S.planet.yaw -= dx * kf; S.planet.pitch = Math.max(-1.5, Math.min(1.5, S.planet.pitch + dy * kf)); S.planet.dragging = true;
         if (!S.planet.turned) { S.planet.turned = true; controls(); }
       }
-      else if (key === 'face') {                       // spin the Moon: the surface follows your finger
+      else if (key === 'face') {                       // spin the Moon (the surface follows your finger) — or slide it, if that's switched on
         const kf = 0.9 / (Math.min(W, H) * 0.4 * S.face.zoom);
-        S.face.yaw -= dx * kf; S.face.pitch = Math.max(-1.5, Math.min(1.5, S.face.pitch + dy * kf));
+        if (S.face.slide) { S.face.pan[0] += dx; S.face.pan[1] += dy; }
+        else { S.face.yaw -= dx * kf; S.face.pitch = Math.max(-1.5, Math.min(1.5, S.face.pitch + dy * kf)); }
         if (!S.face.dragging) { S.face.dragging = true; } if (!S.face.turned) { S.face.turned = true; controls(); }
       }
       else { const p = key === 'planet' ? S.planet.pan : S.pan[key]; p[0] += dx; p[1] += dy; controls(); }
@@ -747,13 +770,14 @@ export const spaceView = {
       <div class="sp-bar"><div class="chips" id="sp-pick"></div><div class="sp-acts" id="sp-acts"></div><div id="sp-hint" class="sp-hint"></div></div>
       <div id="sp-info" class="sky-info hidden"></div>
       <div class="sky-time" id="sp-speed"></div>
+      <button class="chip sp-exit" data-back data-a="clean" aria-label="Show the buttons again">✕</button>
     </div>`;
     root = el.querySelector('.sp-wrap'); cv = root.querySelector('#sp-cv'); g = cv.getContext('2d');
     if (S.yaw === null) faceHome();   // start with your side of the planet facing you
     if (liveMode()) S.simMs = Date.now();
     root.addEventListener('click', onClick);
     bindPointer(); resize(); window.addEventListener('resize', resize);
-    ensureData(); controls();
+    S.clean = false; ensureData(); controls();
     this._off = ctx.bus.on('sats', () => { buildSats(); controls(); });
     this._off2 = ctx.bus.on('iss', () => { buildSats(); controls(); });
     raf = requestAnimationFrame(frame);
@@ -763,6 +787,7 @@ export const spaceView = {
     mounted = false; cancelAnimationFrame(raf); window.removeEventListener('resize', resize);
     if (this._off) this._off(); if (this._off2) this._off2();
     if (root && root.parentElement) root.parentElement.classList.remove('edge');
+    document.body.classList.remove('sky-full', 'sp-clean-on');
     root = null; cv = null; g = null; pointers.clear();
   },
 };

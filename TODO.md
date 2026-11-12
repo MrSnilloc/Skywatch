@@ -137,6 +137,24 @@ Saved from the owner's list on 2026-11-11. Future sessions: read this first.
   (checked: Tsiolkovskiy). Browser-tested; waiting for the owner's phone test. The small Moon in the "Orbit"
   view and on the Earth view is still the simple drawn one.
 
+## Added 2026-11-12 in v0.33 (owner's requests after the list was finished) — all waiting for the phone test
+- **Moon sharper:** 4096-px NASA picture (same CGI Moon Kit, 2019 colour map, converted to a 1.3 MB JPEG) and the
+  close-up is drawn dot-for-dot when still, coarser only while the view is changing (`config.space.moon`).
+- **Moon "Shadow on / off" chip:** off = whole Moon evenly lit, like a map.
+- **Moon pan:** two-finger drag slides the Moon; the "Drag: spin / slide" chip makes one finger slide instead.
+  Recentre undoes it. Spin is unchanged.
+- **Other tabs stay upright:** only the screens in `config.rotatingViews` (Sky) turn sideways. Uses our own tiny
+  Android plugin (`android-app/.../UprightPlugin.java`, registered in `MainActivity.java`, called from
+  `js/platform.js setRotation`). It compiles, but could NOT be tried without a phone.
+- **Launch path on the Sky map** (`js/launchPath.js`, numbers in `config.launches`): from 3 h before liftoff to
+  10 min after, a red dotted ESTIMATED path with minutes-after-liftoff marks, a pulsing "should be here now" dot,
+  and an edge arrow from 15 min before. Direction is guessed from the orbit type and launch-site rules (no free
+  source publishes real trajectories); when unsure it draws both possible paths. Layer switch: "Rocket launches".
+  Tested in a browser with a made-up Wallops launch. Use the time buttons (+1h, +1d) to preview a future launch.
+- **v0.34 — Space "⛶ Clean view" chip** (all Space views): hides every button, caption, the speed bar and the app's
+  top bar and tabs; drag and pinch still work; the faint ✕ (top right) or Android Back brings them back. Names
+  drawn on the picture stay (the Moon has its own "Names" chip). Owner confirmed v0.33 items look good.
+
 ## Planet look (owner feedback 2026-11-11: painted planets don't look good, Jupiter has no Great Red Spot)
 - **BUILT in v0.25:** drag to fly around a planet + "◎ Recentre" chip (also on Earth and the Moon close-up);
   real-image support (`js/planetTextures.js`, file list in `config.space.textures`). With no image files present

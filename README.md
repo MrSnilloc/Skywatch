@@ -44,6 +44,7 @@ It now has its own icon, opens full-screen and works offline (ISS data refreshes
 | `js/identify.js` | “What’s this?” ranking: wide search, ordered by brightness, movement and passes happening now |
 | `js/routes.js` | Flight routes from a callsign (airline, From → To, progress), cached per plane (**add a source: one entry**) |
 | `js/moonSurface.js` | The map the Moon close-up is painted from: NASA's real picture + heights, or the drawn fallback (settings in `config.space.moon`) |
+| `js/launchPath.js` | Estimated path of a rocket launch through your sky (direction from orbit type + launch-site rules, climb from one typical rocket; all in `config.launches`) |
 | `js/aurora.js` | Aurora chance for your latitude from NOAA's 3-day Kp forecast (rule-of-thumb numbers in `config.aurora`) |
 | `js/paths.js` | Projected paths: points ahead/behind for planes and satellites + shared drawing (dotted line, minute marks, faded trail); lengths in `config.paths` |
 | `js/planes.js`, `js/ufo.js`, `js/views/planes.js` | Live aircraft + where they appear in your sky; UFO log and explanations |

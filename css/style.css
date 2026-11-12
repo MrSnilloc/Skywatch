@@ -389,3 +389,10 @@ body.sky-full .sky-hud { top: calc(var(--safe-t) + 54px); left: calc(env(safe-ar
 body.sky-full .sky-zoom { right: calc(env(safe-area-inset-right, 0px) + 10px); }
 body.sky-full .sky-time { bottom: calc(var(--safe-b) + 10px); }
 body.sky-full #fab { bottom: calc(var(--safe-b) + 64px); right: calc(env(safe-area-inset-right, 0px) + 14px); }
+/* the caption under the Space buttons stays readable over a bright, zoomed-in Moon or planet */
+.sp-hint:not(:empty) { background: #04070db8; border-radius: 8px; padding: 3px 7px; width: fit-content; max-width: 100%; }
+/* Space "clean view": nothing but the picture, plus a faint ✕ to get the buttons back */
+.sp-exit { display: none; position: absolute; top: calc(var(--safe-t) + 10px); right: calc(env(safe-area-inset-right, 0px) + 10px); opacity: .45; }
+.sp-wrap.sp-clean .sp-exit { display: block; }
+.sp-wrap.sp-clean .sky-top, .sp-wrap.sp-clean .sp-bar, .sp-wrap.sp-clean #sp-info, .sp-wrap.sp-clean #sp-speed { display: none !important; }
+body.sp-clean-on #fab { display: none; }

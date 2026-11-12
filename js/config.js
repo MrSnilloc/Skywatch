@@ -3,7 +3,8 @@
 
 export const CONFIG = {
   appName: 'UpSight',
-  version: '0.32.0',
+  version: '0.34.0',
+  rotatingViews: ['sky'],    // only these screens turn sideways with the phone; the rest stay upright (Android app),
 
   // First-run defaults. The user can change all of these in Settings.
   defaults: {
@@ -52,13 +53,15 @@ export const CONFIG = {
     moon: {
       picture: 'data/moon/moon.jpg',          // colour picture of the whole surface (NASA SVS CGI Moon Kit)
       heights: 'data/moon/moon_height.jpg',   // heights as grey levels — used for crater shadows near the lit edge
-      maxWidth: 2048,          // the picture is shrunk to this width in memory
+      maxWidth: 4096,          // the picture is shrunk to this width in memory (4096 = full sharpness, about 33 MB while the Moon is open)
       kmPerLevel: 0.08,        // height of one grey level (the picture spans about 20 km, deepest basin to highest peak)
       smooth: 2,               // how many times the heights are blurred before use (hides the picture's graininess)
       relief: 3,               // how strongly slopes are shaded (1 = true to life, which looks flat on a phone)
-      contrast: 1.25,          // above 1 = darker seas
-      step: 1.5,               // one picture dot per this many screen pixels (smaller = sharper but slower)
-      dragStep: 3,             // …while you are dragging
+      gain: 1.3,               // overall brightness of the picture
+      contrast: 1.1,           // above 1 = darker seas
+      step: 1,                 // one picture dot per this many screen pixels (smaller = sharper but slower)
+      dragStep: 2.5,           // …while the view is changing (dragging, time sped up)
+      settleMs: 220,           // …and sharpen again this long after it stops changing
     },
     // Real surface maps for the planet close-ups (see planetTextures.js). A missing file just means the simple painted look.
     textures: {
@@ -117,6 +120,28 @@ export const CONFIG = {
     cacheMin: 60,
     likelyKm: 650,           // pad closer than this: a night/twilight launch is usually easy to see
     maybeKm: 1300,           // closer than this: sometimes visible low on the horizon (e.g. Florida from Virginia)
+    // --- estimated path on the Sky map (launchPath.js) ---
+    skyBeforeMin: 180,       // show the path from this long before liftoff…
+    skyAfterMin: 10,         // …until this long after
+    skyMinEl: 0.5,           // only the part at least this many degrees above your horizon
+    // A typical two-stage rocket to low orbit: [seconds after liftoff, height km, distance over the ground km]
+    ascent: [[0, 0, 0], [60, 8, 2], [90, 20, 9], [120, 38, 27], [150, 62, 68], [180, 85, 125], [240, 120, 285], [300, 150, 490], [360, 175, 750], [420, 195, 1060], [480, 205, 1430], [540, 210, 1860]],
+    // Directions (degrees from north) each site is allowed to launch toward. Unknown sites: any direction.
+    sites: [
+      { name: 'Cape Canaveral / Kennedy', lat: 28.5, lon: -80.6, from: 35, to: 125 },
+      { name: 'Wallops Island', lat: 37.85, lon: -75.48, from: 85, to: 140 },
+      { name: 'Vandenberg', lat: 34.7, lon: -120.6, from: 130, to: 205 },
+      { name: 'Starbase', lat: 25.99, lon: -97.15, from: 80, to: 110 },
+    ],
+    // Orbit tilt (degrees) guessed from the launch's orbit / name / mission text; first match wins. 'pad' = due east.
+    orbits: [
+      { match: 'ISS|Crew-|Cargo Dragon|CRS|Cygnus|Starliner|Progress|Soyuz MS|Dream Chaser|Axiom', inclinations: [51.6] },
+      { match: 'GTO|GEO|Geostationary|Geosynchronous|TLI|Lunar|Mars|L2|Heliocentric', inclinations: ['pad'] },
+      { match: 'SSO|Sun-Synchronous', inclinations: [97.5] },
+      { match: 'Polar', inclinations: [90] },
+      { match: 'Starlink', inclinations: [53, 43] },
+      { match: 'LEO|Low Earth', inclinations: [53, 'pad'] },
+    ],
   },
 
   comets: {

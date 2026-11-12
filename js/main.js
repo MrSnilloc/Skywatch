@@ -8,7 +8,7 @@ import { openSettings } from './views/settings.js';
 import { refreshIss, needsRecompute } from './issService.js';
 import { icons } from './ui.js';
 import { initSats, recomputeLoaded } from './satellites.js';
-import { isNativeApp } from './platform.js';
+import { isNativeApp, setRotation } from './platform.js';
 import { initNotify } from './notify.js';
 import { initBack } from './back.js';
 
@@ -33,6 +33,7 @@ function go(id, params) {
   viewEl.innerHTML = '';
   current = next;
   document.body.dataset.view = next.id;
+  setRotation(CONFIG.rotatingViews.includes(next.id));
   next.mount(viewEl, ctx, params);
   navEl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.view === next.id));
   try { history.replaceState(null, '', '#' + next.id); } catch (e) { /* ignore */ }

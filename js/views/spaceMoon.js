@@ -15,7 +15,7 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const mixv = (a, b, ca, cb) => [a[0] * ca + b[0] * cb, a[1] * ca + b[1] * cb, a[2] * ca + b[2] * cb];
 
-let buf = null, bufG = null, bufKey = '';
+let buf = null, bufG = null, bufKey = '', lastSig = '', changedAt = 0, rapid = false;
 
 /** The viewer's camera: starts as the view from your backyard, then turned by the user's drag (yaw, pitch). */
 function camera(mg, st) {
@@ -28,13 +28,18 @@ function camera(mg, st) {
 /**
  * Paint the lit globe into an off-screen picture that covers the screen (one picture dot per `step` screen
  * pixels), so it stays sharp however far you zoom in. Re-used while the view and the light haven't changed.
- * V = { cx, cy, R, W, H, step, night }
+ * While the view keeps changing (dragging, time sped up) it is painted coarser to stay quick, then sharpened
+ * as soon as it settles. V = { cx, cy, R, W, H, night, flat (no shadow), dragging, cfg (config.space.moon) }
+ * -> { pic, step }
  */
 function renderGlobe(mg, cam, V) {
-  const M = moonSurface(), { cx, cy, R, step } = V;
-  const bw = Math.ceil(V.W / step), bh = Math.ceil(V.H / step);
-  const key = [M.id, bw, bh, step, V.night, cx, cy, R.toFixed(1), ...[...cam.d, ...cam.up, ...mg.sunDir].map(v => v.toFixed(3))].join(',');
-  if (key === bufKey) return buf;
+  const M = moonSurface(), { cx, cy, R, cfg } = V, now = performance.now();
+  const sig = [M.id, V.W, V.H, V.night, V.flat, cx.toFixed(1), cy.toFixed(1), R.toFixed(1), ...[...cam.d, ...cam.up, ...mg.sunDir].map(v => v.toFixed(3))].join(',');
+  if (sig !== lastSig) { rapid = now - changedAt < cfg.settleMs; lastSig = sig; changedAt = now; }
+  else if (now - changedAt >= cfg.settleMs) rapid = false;
+  const step = V.dragging || rapid ? cfg.dragStep : cfg.step;
+  const bw = Math.ceil(V.W / step), bh = Math.ceil(V.H / step), key = sig + '|' + step;
+  if (key === bufKey) return { pic: buf, step };
   if (!buf || buf.width !== bw || buf.height !== bh) { buf = document.createElement('canvas'); buf.width = bw; buf.height = bh; bufG = buf.getContext('2d'); }
   const img = bufG.createImageData(bw, bh), d = img.data;
   const ax = (v) => [dot(v, mg.xm), dot(v, mg.ym), dot(v, mg.zm)];       // into the Moon's own axes
@@ -67,6 +72,13 @@ function renderGlobe(mg, cam, V) {
     w00 = (1 - tx) * (1 - ty); w10 = tx * (1 - ty); w01 = (1 - tx) * ty; w11 = tx * ty;
     const sgx = M.gx[a] * w00 + M.gx[b2] * w10 + M.gx[c] * w01 + M.gx[e] * w11, sgy = M.gy[a] * w00 + M.gy[b2] * w10 + M.gy[c] * w01 + M.gy[e] * w11;
     const l = x * S[0] + y * S[1] + zz * S[2];
+    if (V.flat) {                                      // "shadow off": the whole Moon evenly lit, like a map
+      const v = (0.8 + 0.2 * z) * 250;
+      let r = cr * v, gg = cg * v, bb = cb * v;
+      if (V.night) { const L = 0.3 * r + 0.55 * gg + 0.15 * bb; r = L * 1.1; gg = L * 0.12; bb = L * 0.08; }
+      d[q] = r; d[q + 1] = gg; d[q + 2] = bb; d[q + 3] = Math.max(0, Math.min(1, (1 - Math.sqrt(rr)) * edgePx + 0.5)) * 255;
+      continue;
+    }
     // local east / north on the surface, to turn the map's slopes into light and shadow
     const el = Math.hypot(x, y) || 1e-6, ex = -y / el, ey = x / el;
     const nx = -zz * ey, ny = zz * ex, nzv = x * ey - y * ex;
@@ -82,7 +94,7 @@ function renderGlobe(mg, cam, V) {
     d[q] = r; d[q + 1] = gg; d[q + 2] = bb; d[q + 3] = Math.max(0, Math.min(1, (1 - Math.sqrt(rr)) * edgePx + 0.5)) * 255;
   }
   bufG.putImageData(img, 0, 0); bufKey = key;
-  return buf;
+  return { pic: buf, step };
 }
 
 const STYLE = {
@@ -95,10 +107,11 @@ const STYLE = {
 export function drawMoonFace(k, st, date) {
   const { g, W, H, col } = k;
   const mg = moonGlobe(date, k.ctx.location()), cam = camera(mg, st);
-  const R = Math.min(W, H) * 0.4 * st.zoom, cx = W / 2, cy = H / 2 + 6;
-  const step = st.dragging ? k.ctx.config.space.moon.dragStep : k.ctx.config.space.moon.step;   // coarser while you drag, to stay quick
+  const R = Math.min(W, H) * 0.4 * st.zoom;
+  st.pan = st.pan.map(v => Math.max(-R, Math.min(R, v)));          // slid across the screen, but never right off it
+  const cx = W / 2 + st.pan[0], cy = H / 2 + 6 + st.pan[1];
   g.imageSmoothingEnabled = true;
-  const pic = renderGlobe(mg, cam, { cx, cy, R, W, H, step, night: k.night });
+  const { pic, step } = renderGlobe(mg, cam, { cx, cy, R, W, H, night: k.night, flat: st.flat, dragging: st.dragging, cfg: k.ctx.config.space.moon });
   g.drawImage(pic, 0, 0, pic.width * step, pic.height * step);
 
   // features: where each one is on screen, and how high the Sun is there
@@ -112,7 +125,7 @@ export function drawMoonFace(k, st, date) {
     if (depth < 0.1) continue;
     const x = cx + R * dot(v, cam.right), y = cy - R * dot(v, cam.up);
     if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
-    const lit = sunAlt > 0, info = () => ({ title: f.name, lines: [...f.lines, lit ? (sunAlt < 12 ? 'On today’s lit edge — long shadows, great in binoculars tonight' : 'In full sunlight right now') : 'In darkness right now'] });
+    const lit = sunAlt > 0, shown = lit || st.flat, info = () => ({ title: f.name, lines: [...f.lines, lit ? (sunAlt < 12 ? 'On today’s lit edge — long shadows, great in binoculars tonight' : 'In full sunlight right now') : 'In darkness right now'] });
     k.hits.push({ x, y, pri: f.kind === 'apollo' ? 12 : 6, id: 'mf:' + f.id, info });
     if (!st.names || f.rank > maxRank) continue;
     const s = STYLE[f.kind], text = f.name;
@@ -120,7 +133,7 @@ export function drawMoonFace(k, st, date) {
     const box = f.kind === 'sea' ? [x - tw / 2, y - 7, tw, 14] : [x + 7, y - 7, tw, 14];
     if (boxes.some(b => box[0] < b[0] + b[2] + 3 && box[0] + box[2] + 3 > b[0] && box[1] < b[1] + b[3] && box[1] + box[3] > b[1])) continue;
     boxes.push(box);
-    g.globalAlpha = Math.min(1, (depth - 0.1) / 0.25) * (lit ? 1 : 0.55);
+    g.globalAlpha = Math.min(1, (depth - 0.1) / 0.25) * (shown ? 1 : 0.55);
     if (f.kind === 'apollo') {                                    // a little flag
       g.strokeStyle = col(s.color); g.lineWidth = 1.4; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 10); g.stroke();
       g.fillStyle = col(s.color); g.beginPath(); g.moveTo(x, y - 10); g.lineTo(x + 7, y - 7.5); g.lineTo(x, y - 5); g.closePath(); g.fill();
@@ -134,11 +147,12 @@ export function drawMoonFace(k, st, date) {
   const pct = Math.round(mg.fraction * 100);
   const where = mg.alt != null ? (mg.alt > 0 ? ` · ${dirName(mg.az)}, ${Math.round(mg.alt)}° up` : ' · below your horizon') : '';
   edge.sort((a, b) => b.sizeDeg - a.sizeDeg);
-  const tip = pct >= 97 ? 'Full Moon: no shadows, so craters look flat — look for the bright rays of Tycho and Copernicus instead'
+  const tip = st.flat ? 'Shadow off: the whole Moon shown evenly lit, like a map — tap “Shadow off” to see tonight’s real phase again'
+    : pct >= 97 ? 'Full Moon: no shadows, so craters look flat — look for the bright rays of Tycho and Copernicus instead'
     : pct <= 3 ? 'New Moon: the lit side faces away from us'
     : edge.length ? `Blue band = today’s lit edge, the best place for binoculars: ${edge.slice(0, 4).map(f => f.name.replace('Mare ', 'M. ')).join(', ')}`
     : 'Blue band = today’s lit edge — shadows are longest there, best for binoculars';
   st.caption = `${phaseName(mg.phase)} · ${pct}% lit${where}`;
   st.tip = tip;
-  st.turned = Math.abs(st.yaw) > 0.02 || Math.abs(st.pitch) > 0.02;
+  st.turned = Math.abs(st.yaw) > 0.02 || Math.abs(st.pitch) > 0.02 || Math.hypot(st.pan[0], st.pan[1]) > 2;
 }
